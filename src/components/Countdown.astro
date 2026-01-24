@@ -1,0 +1,78 @@
+---
+import { config } from '../config';
+
+const weddingDate = config.weddingDate;
+---
+
+<section class="section bg-secondary" id="countdown">
+  <div class="container">
+    <div class="text-center animate-on-scroll">
+      <h2 class="section-title">Counting Down To</h2>
+      <p class="section-subtitle">The day we say "I do"</p>
+    </div>
+
+    <div
+      class="flex justify-center gap-4 md:gap-8 lg:gap-12 stagger-children"
+      id="countdown-timer"
+      data-wedding-date={weddingDate}
+    >
+      <div class="countdown-item">
+        <span class="countdown-number" id="countdown-days">--</span>
+        <span class="countdown-label">Days</span>
+      </div>
+      <div class="countdown-item">
+        <span class="countdown-number" id="countdown-hours">--</span>
+        <span class="countdown-label">Hours</span>
+      </div>
+      <div class="countdown-item">
+        <span class="countdown-number" id="countdown-minutes">--</span>
+        <span class="countdown-label">Minutes</span>
+      </div>
+      <div class="countdown-item">
+        <span class="countdown-number" id="countdown-seconds">--</span>
+        <span class="countdown-label">Seconds</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+  function updateCountdown() {
+    const container = document.getElementById('countdown-timer');
+    if (!container) return;
+
+    const weddingDate = new Date(container.dataset.weddingDate || '');
+    const now = new Date();
+    const diff = weddingDate.getTime() - now.getTime();
+
+    if (diff <= 0) {
+      // Wedding day has passed or is today
+      document.getElementById('countdown-days')!.textContent = '0';
+      document.getElementById('countdown-hours')!.textContent = '0';
+      document.getElementById('countdown-minutes')!.textContent = '0';
+      document.getElementById('countdown-seconds')!.textContent = '0';
+      return;
+    }
+
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+    const daysEl = document.getElementById('countdown-days');
+    const hoursEl = document.getElementById('countdown-hours');
+    const minutesEl = document.getElementById('countdown-minutes');
+    const secondsEl = document.getElementById('countdown-seconds');
+
+    if (daysEl) daysEl.textContent = days.toString();
+    if (hoursEl) hoursEl.textContent = hours.toString().padStart(2, '0');
+    if (minutesEl) minutesEl.textContent = minutes.toString().padStart(2, '0');
+    if (secondsEl) secondsEl.textContent = seconds.toString().padStart(2, '0');
+  }
+
+  // Initial update
+  updateCountdown();
+
+  // Update every second
+  setInterval(updateCountdown, 1000);
+</script>

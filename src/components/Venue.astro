@@ -1,0 +1,107 @@
+---
+import { config } from '../config';
+
+// Get venues with maps from events
+const venuesWithMaps = config.events.filter(event => event.mapsEmbed);
+const mainVenue = venuesWithMaps[0]; // Show the first venue with a map
+---
+
+<section class="section" id="venue">
+  <div class="container">
+    <div class="text-center animate-on-scroll">
+      <h2 class="section-title">Venue</h2>
+      <p class="section-subtitle">Where we'll celebrate our love</p>
+    </div>
+
+    {mainVenue && (
+      <div class="max-w-4xl mx-auto">
+        <div class="grid md:grid-cols-2 gap-8 items-center">
+          <!-- Venue Info -->
+          <div class="animate-on-scroll">
+            <h3 class="font-serif text-2xl mb-4">{mainVenue.title}</h3>
+            <div class="space-y-4">
+              <div class="flex items-start gap-3">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-primary flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                <div>
+                  <p class="font-medium">{mainVenue.venue}</p>
+                  <p class="text-muted">{mainVenue.address}</p>
+                </div>
+              </div>
+
+              <div class="flex items-start gap-3">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-primary flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div>
+                  <p class="font-medium">{mainVenue.time}</p>
+                  <p class="text-muted">{mainVenue.description}</p>
+                </div>
+              </div>
+
+              {mainVenue.mapsLink && (
+                <a
+                  href={mainVenue.mapsLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="btn btn-outline mt-4"
+                >
+                  Get Directions
+                </a>
+              )}
+            </div>
+          </div>
+
+          <!-- Map -->
+          <div class="animate-on-scroll aspect-square md:aspect-auto md:h-80 bg-secondary rounded overflow-hidden">
+            {mainVenue.mapsEmbed ? (
+              <iframe
+                src={mainVenue.mapsEmbed}
+                width="100%"
+                height="100%"
+                style="border:0;"
+                allowfullscreen=""
+                loading="lazy"
+                referrerpolicy="no-referrer-when-downgrade"
+                title={`Map to ${mainVenue.venue}`}
+              ></iframe>
+            ) : (
+              <div class="w-full h-full flex items-center justify-center text-muted">
+                <p>Map will be displayed here</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Show additional venues if there are more */}
+        {venuesWithMaps.length > 1 && (
+          <div class="mt-12 pt-12 border-t border-secondary">
+            <h3 class="font-serif text-xl text-center mb-8">Other Venues</h3>
+            <div class="grid md:grid-cols-2 gap-6">
+              {venuesWithMaps.slice(1).map(venue => (
+                <div class="bg-secondary p-6 animate-on-scroll">
+                  <h4 class="font-serif text-lg mb-2">{venue.title}</h4>
+                  <p class="font-medium">{venue.venue}</p>
+                  <p class="text-muted text-sm mb-2">{venue.address}</p>
+                  <p class="text-primary text-sm">{venue.time}</p>
+                  {venue.mapsLink && (
+                    <a
+                      href={venue.mapsLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="inline-flex items-center gap-1 mt-3 text-sm text-primary hover:text-accent"
+                    >
+                      View on Maps &rarr;
+                    </a>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    )}
+  </div>
+</section>

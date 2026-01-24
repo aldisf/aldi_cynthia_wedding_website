@@ -1,0 +1,1509 @@
+---
+import { config } from '../../config';
+
+export const prerender = false;
+
+// Check authentication
+const authCookie = Astro.cookies.get('admin_auth');
+if (authCookie?.value !== 'authenticated') {
+  return Astro.redirect('/admin/login');
+}
+
+const pageTitle = `Admin Dashboard - ${config.site.title}`;
+const siteUrl = import.meta.env.PUBLIC_SITE_URL || Astro.url.origin;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600&display=swap" rel="stylesheet">
+    <title>{pageTitle}</title>
+    <style is:global>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: 'Montserrat', sans-serif;
+        background-color: #f7fafc;
+        color: #2d3748;
+        line-height: 1.5;
+      }
+
+      /* Layout */
+      .admin-layout {
+        display: flex;
+        min-height: 100vh;
+      }
+
+      .sidebar {
+        width: 250px;
+        background: #2d3748;
+        color: white;
+        padding: 1.5rem;
+        flex-shrink: 0;
+      }
+
+      .sidebar-title {
+        font-size: 1.25rem;
+        font-weight: 600;
+        margin-bottom: 2rem;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid rgba(255,255,255,0.1);
+      }
+
+      .sidebar-nav {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+
+      .sidebar-link {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.75rem 1rem;
+        color: rgba(255,255,255,0.7);
+        text-decoration: none;
+        border-radius: 0.375rem;
+        transition: all 0.2s;
+      }
+
+      .sidebar-link:hover, .sidebar-link.active {
+        background: rgba(255,255,255,0.1);
+        color: white;
+      }
+
+      .sidebar-link svg {
+        width: 1.25rem;
+        height: 1.25rem;
+      }
+
+      .main-content {
+        flex: 1;
+        padding: 2rem;
+        overflow-x: auto;
+      }
+
+      /* Header */
+      .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2rem;
+      }
+
+      .page-title {
+        font-size: 1.5rem;
+        font-weight: 600;
+      }
+
+      /* Stats Cards */
+      .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+      }
+
+      .stat-card {
+        background: white;
+        padding: 1.5rem;
+        border-radius: 0.5rem;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      }
+
+      .stat-label {
+        font-size: 0.875rem;
+        color: #718096;
+        margin-bottom: 0.5rem;
+      }
+
+      .stat-value {
+        font-size: 2rem;
+        font-weight: 600;
+        color: #87A878;
+      }
+
+      .stat-value.pending {
+        color: #ECC94B;
+      }
+
+      .stat-value.declined {
+        color: #E53E3E;
+      }
+
+      /* Cards */
+      .card {
+        background: white;
+        border-radius: 0.5rem;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        margin-bottom: 1.5rem;
+      }
+
+      .card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem 1.5rem;
+        border-bottom: 1px solid #e2e8f0;
+      }
+
+      .card-title {
+        font-size: 1rem;
+        font-weight: 600;
+      }
+
+      .card-body {
+        padding: 1.5rem;
+      }
+
+      /* Table */
+      .table-container {
+        overflow-x: auto;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.875rem;
+      }
+
+      th, td {
+        padding: 0.75rem 1rem;
+        text-align: left;
+        border-bottom: 1px solid #e2e8f0;
+      }
+
+      th {
+        background: #f7fafc;
+        font-weight: 600;
+        color: #4a5568;
+      }
+
+      tr:hover {
+        background: #f7fafc;
+      }
+
+      /* Buttons */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 1rem;
+        font-size: 0.875rem;
+        font-weight: 500;
+        border: none;
+        border-radius: 0.375rem;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+
+      .btn-primary {
+        background: #87A878;
+        color: white;
+      }
+
+      .btn-primary:hover {
+        background: #6b8a5e;
+      }
+
+      .btn-secondary {
+        background: #e2e8f0;
+        color: #4a5568;
+      }
+
+      .btn-secondary:hover {
+        background: #cbd5e0;
+      }
+
+      .btn-danger {
+        background: #E53E3E;
+        color: white;
+      }
+
+      .btn-danger:hover {
+        background: #C53030;
+      }
+
+      .btn-sm {
+        padding: 0.375rem 0.75rem;
+        font-size: 0.75rem;
+      }
+
+      /* Badges */
+      .badge {
+        display: inline-block;
+        padding: 0.25rem 0.75rem;
+        font-size: 0.75rem;
+        font-weight: 500;
+        border-radius: 9999px;
+      }
+
+      .badge-success {
+        background: #C6F6D5;
+        color: #276749;
+      }
+
+      .badge-warning {
+        background: #FEFCBF;
+        color: #975A16;
+      }
+
+      .badge-danger {
+        background: #FED7D7;
+        color: #C53030;
+      }
+
+      /* Forms */
+      .form-group {
+        margin-bottom: 1rem;
+      }
+
+      .form-label {
+        display: block;
+        font-size: 0.875rem;
+        font-weight: 500;
+        margin-bottom: 0.5rem;
+        color: #4a5568;
+      }
+
+      .form-input, .form-select, .form-textarea {
+        width: 100%;
+        padding: 0.5rem 0.75rem;
+        font-size: 0.875rem;
+        border: 1px solid #e2e8f0;
+        border-radius: 0.375rem;
+        background: white;
+      }
+
+      .form-input:focus, .form-select:focus, .form-textarea:focus {
+        outline: none;
+        border-color: #87A878;
+        box-shadow: 0 0 0 3px rgba(135, 168, 120, 0.1);
+      }
+
+      .form-textarea {
+        resize: vertical;
+        min-height: 100px;
+      }
+
+      /* Modal */
+      .modal-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.5);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 100;
+      }
+
+      .modal-overlay.is-open {
+        display: flex;
+      }
+
+      .modal {
+        background: white;
+        border-radius: 0.5rem;
+        width: 100%;
+        max-width: 500px;
+        max-height: 90vh;
+        overflow-y: auto;
+        margin: 1rem;
+      }
+
+      .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem 1.5rem;
+        border-bottom: 1px solid #e2e8f0;
+      }
+
+      .modal-title {
+        font-size: 1.125rem;
+        font-weight: 600;
+      }
+
+      .modal-close {
+        background: none;
+        border: none;
+        font-size: 1.5rem;
+        cursor: pointer;
+        color: #718096;
+      }
+
+      .modal-body {
+        padding: 1.5rem;
+      }
+
+      .modal-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.75rem;
+        padding: 1rem 1.5rem;
+        border-top: 1px solid #e2e8f0;
+      }
+
+      /* Tabs */
+      .tabs {
+        display: none;
+      }
+
+      .tabs.active {
+        display: block;
+      }
+
+      /* Action Links */
+      .action-link {
+        color: #87A878;
+        cursor: pointer;
+        text-decoration: none;
+      }
+
+      .action-link:hover {
+        text-decoration: underline;
+      }
+
+      .action-link.danger {
+        color: #E53E3E;
+      }
+
+      /* Copy Link */
+      .copy-link {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+
+      .copy-link input {
+        flex: 1;
+        padding: 0.375rem 0.5rem;
+        font-size: 0.75rem;
+        border: 1px solid #e2e8f0;
+        border-radius: 0.25rem;
+        background: #f7fafc;
+      }
+
+      /* File Upload */
+      .file-upload {
+        border: 2px dashed #e2e8f0;
+        border-radius: 0.5rem;
+        padding: 2rem;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+
+      .file-upload:hover {
+        border-color: #87A878;
+        background: rgba(135, 168, 120, 0.05);
+      }
+
+      .file-upload input {
+        display: none;
+      }
+
+      /* Toast */
+      .toast {
+        position: fixed;
+        bottom: 1rem;
+        right: 1rem;
+        padding: 1rem 1.5rem;
+        background: #2d3748;
+        color: white;
+        border-radius: 0.5rem;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        transform: translateY(100px);
+        opacity: 0;
+        transition: all 0.3s;
+        z-index: 200;
+      }
+
+      .toast.show {
+        transform: translateY(0);
+        opacity: 1;
+      }
+
+      .toast.success {
+        background: #48BB78;
+      }
+
+      .toast.error {
+        background: #E53E3E;
+      }
+
+      /* Responsive */
+      @media (max-width: 768px) {
+        .sidebar {
+          display: none;
+        }
+
+        .main-content {
+          padding: 1rem;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="admin-layout">
+      <!-- Sidebar -->
+      <aside class="sidebar">
+        <div class="sidebar-title">Wedding Admin</div>
+        <nav class="sidebar-nav">
+          <a href="#dashboard" class="sidebar-link active" data-tab="dashboard">
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
+            Dashboard
+          </a>
+          <a href="#guests" class="sidebar-link" data-tab="guests">
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+            Guests
+          </a>
+          <a href="#invitations" class="sidebar-link" data-tab="invitations">
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg>
+            Send Invites
+          </a>
+          <a href="#messages" class="sidebar-link" data-tab="messages">
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
+            Messages
+          </a>
+          <a href="#import" class="sidebar-link" data-tab="import">
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
+            Import CSV
+          </a>
+        </nav>
+        <div style="margin-top: auto; padding-top: 2rem;">
+          <a href="/" class="sidebar-link" target="_blank">
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+            View Website
+          </a>
+          <button class="sidebar-link" id="logout-btn" style="width: 100%; border: none; background: none; cursor: pointer;">
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+            Logout
+          </button>
+        </div>
+      </aside>
+
+      <!-- Main Content -->
+      <main class="main-content">
+        <!-- Dashboard Tab -->
+        <div id="dashboard-tab" class="tabs active">
+          <div class="page-header">
+            <h1 class="page-title">Dashboard</h1>
+          </div>
+
+          <div class="stats-grid" id="stats-container">
+            <div class="stat-card">
+              <div class="stat-label">Total Invited</div>
+              <div class="stat-value" id="stat-total">-</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Confirmed</div>
+              <div class="stat-value" id="stat-confirmed">-</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Pending</div>
+              <div class="stat-value pending" id="stat-pending">-</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Declined</div>
+              <div class="stat-value declined" id="stat-declined">-</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Total Attending</div>
+              <div class="stat-value" id="stat-attending">-</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <h2 class="card-title">Recent RSVPs</h2>
+            </div>
+            <div class="card-body">
+              <div class="table-container">
+                <table id="recent-rsvps">
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Status</th>
+                      <th>Plus Ones</th>
+                      <th>Updated</th>
+                    </tr>
+                  </thead>
+                  <tbody></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Guests Tab -->
+        <div id="guests-tab" class="tabs">
+          <div class="page-header">
+            <h1 class="page-title">Guest List</h1>
+            <button class="btn btn-primary" id="add-guest-btn">
+              <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 1rem; height: 1rem;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
+              Add Guest
+            </button>
+          </div>
+
+          <!-- Filters -->
+          <div class="card" style="margin-bottom: 1rem;">
+            <div class="card-body" style="padding: 1rem;">
+              <div style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: center;">
+                <div class="form-group" style="margin: 0;">
+                  <label class="form-label" style="margin-bottom: 0.25rem;">Filter by Side</label>
+                  <select class="form-select" id="filter-side" style="min-width: 150px;">
+                    <option value="all">All Guests</option>
+                    <option value="groom">Groom's Side</option>
+                    <option value="bride">Bride's Side</option>
+                    <option value="both">Both Sides</option>
+                  </select>
+                </div>
+                <div class="form-group" style="margin: 0;">
+                  <label class="form-label" style="margin-bottom: 0.25rem;">Filter by RSVP</label>
+                  <select class="form-select" id="filter-rsvp" style="min-width: 150px;">
+                    <option value="all">All Status</option>
+                    <option value="pending">Pending</option>
+                    <option value="yes">Confirmed</option>
+                    <option value="no">Declined</option>
+                  </select>
+                </div>
+                <div class="form-group" style="margin: 0;">
+                  <label class="form-label" style="margin-bottom: 0.25rem;">Search</label>
+                  <input type="text" class="form-input" id="filter-search" placeholder="Search by name..." style="min-width: 200px;">
+                </div>
+                <div style="margin-left: auto; align-self: flex-end;">
+                  <span id="filter-count" style="color: #718096; font-size: 0.875rem;"></span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-body">
+              <div class="table-container">
+                <table id="guests-table">
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Side</th>
+                      <th>Phone</th>
+                      <th>+1s</th>
+                      <th>Attending</th>
+                      <th>RSVP</th>
+                      <th>Unique Link</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Invitations Tab -->
+        <div id="invitations-tab" class="tabs">
+          <div class="page-header">
+            <h1 class="page-title">Send WhatsApp Invitations</h1>
+          </div>
+
+          <!-- Message Template Card -->
+          <div class="card" style="margin-bottom: 1.5rem;">
+            <div class="card-header">
+              <h2 class="card-title">Message Template</h2>
+            </div>
+            <div class="card-body">
+              <p style="margin-bottom: 1rem; color: #718096; font-size: 0.875rem;">
+                Configure the invitation message template. Use <code>{'{name}'}</code> for guest name and <code>{'{link}'}</code> for their unique RSVP link.
+              </p>
+              <div class="form-group">
+                <label class="form-label">WhatsApp Message Template</label>
+                <textarea class="form-textarea" id="wa-template" rows="5" style="font-family: monospace;">{`Hi {name}! 💒
+
+You are cordially invited to our wedding celebration! Please RSVP using your personal link below:
+
+{link}
+
+We hope to see you there! 💕`}</textarea>
+              </div>
+              <button class="btn btn-primary" id="save-template-btn">Save Template</button>
+            </div>
+          </div>
+
+          <!-- Filter and Guest List -->
+          <div class="card" style="margin-bottom: 1rem;">
+            <div class="card-body" style="padding: 1rem;">
+              <div style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: center;">
+                <div class="form-group" style="margin: 0;">
+                  <label class="form-label" style="margin-bottom: 0.25rem;">Filter by Side</label>
+                  <select class="form-select" id="invite-filter-side" style="min-width: 150px;">
+                    <option value="all">All Guests</option>
+                    <option value="groom">Groom's Side</option>
+                    <option value="bride">Bride's Side</option>
+                  </select>
+                </div>
+                <div class="form-group" style="margin: 0;">
+                  <label class="form-label" style="margin-bottom: 0.25rem;">Has Phone Number</label>
+                  <select class="form-select" id="invite-filter-phone" style="min-width: 150px;">
+                    <option value="yes">With Phone Only</option>
+                    <option value="all">All Guests</option>
+                  </select>
+                </div>
+                <div style="margin-left: auto; align-self: flex-end;">
+                  <span id="invite-count" style="color: #718096; font-size: 0.875rem;"></span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-body">
+              <div class="table-container">
+                <table id="invitations-table">
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Side</th>
+                      <th>Phone</th>
+                      <th>RSVP Status</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Messages Tab -->
+        <div id="messages-tab" class="tabs">
+          <div class="page-header">
+            <h1 class="page-title">Messages</h1>
+            <button class="btn btn-primary" id="add-message-btn">
+              <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 1rem; height: 1rem;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
+              Add Message
+            </button>
+          </div>
+
+          <div class="card">
+            <div class="card-body">
+              <div class="table-container">
+                <table id="messages-table">
+                  <thead>
+                    <tr>
+                      <th>Guest Name</th>
+                      <th>Message</th>
+                      <th>Visible</th>
+                      <th>Date</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Import Tab -->
+        <div id="import-tab" class="tabs">
+          <div class="page-header">
+            <h1 class="page-title">Import Guests from CSV</h1>
+          </div>
+
+          <div class="card">
+            <div class="card-body">
+              <p style="margin-bottom: 1rem; color: #718096;">
+                Upload a CSV file with guest information. The file should have the following columns:
+                <code style="background: #f7fafc; padding: 0.25rem 0.5rem; border-radius: 0.25rem;">name, email, phone, guest_side, invited_to, max_plus_ones</code>
+              </p>
+              <p style="margin-bottom: 1.5rem; color: #718096; font-size: 0.875rem;">
+                Note: <code>guest_side</code> can be "groom", "bride", or "both" (default). <code>invited_to</code> can be "ceremony", "reception", or "both" (default). <code>max_plus_ones</code> is the number of additional guests they can bring (default: 0).
+              </p>
+
+              <label class="file-upload" id="csv-upload">
+                <input type="file" accept=".csv" id="csv-file" />
+                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 3rem; height: 3rem; margin: 0 auto 1rem; color: #718096;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
+                <p style="color: #4a5568; font-weight: 500;">Click to upload or drag and drop</p>
+                <p style="color: #718096; font-size: 0.875rem;">CSV file only</p>
+              </label>
+
+              <div id="csv-preview" style="margin-top: 1.5rem; display: none;">
+                <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 1rem;">Preview</h3>
+                <div class="table-container">
+                  <table id="csv-preview-table">
+                    <thead></thead>
+                    <tbody></tbody>
+                  </table>
+                </div>
+                <div style="margin-top: 1rem; display: flex; gap: 0.75rem;">
+                  <button class="btn btn-primary" id="import-btn">Import Guests</button>
+                  <button class="btn btn-secondary" id="cancel-import-btn">Cancel</button>
+                </div>
+              </div>
+
+              <div id="import-result" style="margin-top: 1.5rem; display: none;"></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <h2 class="card-title">Sample CSV Format</h2>
+            </div>
+            <div class="card-body">
+              <pre style="background: #f7fafc; padding: 1rem; border-radius: 0.375rem; overflow-x: auto; font-size: 0.875rem;">name,email,phone,guest_side,invited_to,max_plus_ones
+John Doe,john@example.com,+1234567890,groom,both,1
+Jane Smith,jane@example.com,,bride,ceremony,0
+Bob Johnson,,+0987654321,both,reception,2</pre>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <!-- Add Guest Modal -->
+    <div class="modal-overlay" id="add-guest-modal">
+      <div class="modal">
+        <div class="modal-header">
+          <h3 class="modal-title">Add New Guest</h3>
+          <button class="modal-close" data-close-modal>&times;</button>
+        </div>
+        <form id="add-guest-form">
+          <div class="modal-body">
+            <div class="form-group">
+              <label class="form-label">Name *</label>
+              <input type="text" class="form-input" name="name" required />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Email</label>
+              <input type="email" class="form-input" name="email" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Phone (for WhatsApp)</label>
+              <input type="tel" class="form-input" name="phone" placeholder="+628123456789" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Guest Side</label>
+              <select class="form-select" name="guest_side">
+                <option value="both">Both (Mutual Friend)</option>
+                <option value="groom">Groom's Side</option>
+                <option value="bride">Bride's Side</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Invited To</label>
+              <select class="form-select" name="invited_to">
+                <option value="both">Both Events</option>
+                <option value="ceremony">Ceremony Only</option>
+                <option value="reception">Reception Only</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Allocated Plus Ones</label>
+              <input type="number" class="form-input" name="max_plus_ones" min="0" max="10" value="0" />
+              <p style="font-size: 0.75rem; color: #718096; margin-top: 0.25rem;">Number of additional guests this person can bring</p>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-close-modal>Cancel</button>
+            <button type="submit" class="btn btn-primary">Add Guest</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Add Message Modal -->
+    <div class="modal-overlay" id="add-message-modal">
+      <div class="modal">
+        <div class="modal-header">
+          <h3 class="modal-title">Add New Message</h3>
+          <button class="modal-close" data-close-modal>&times;</button>
+        </div>
+        <form id="add-message-form">
+          <div class="modal-body">
+            <div class="form-group">
+              <label class="form-label">Guest Name *</label>
+              <input type="text" class="form-input" name="guest_name" required />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Message *</label>
+              <textarea class="form-textarea" name="content" required></textarea>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-close-modal>Cancel</button>
+            <button type="submit" class="btn btn-primary">Add Message</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast" id="toast"></div>
+
+    <script define:vars={{ siteUrl }}>
+      // State
+      let guests = [];
+      let messages = [];
+      let csvData = [];
+
+      // DOM Elements
+      const tabs = document.querySelectorAll('.tabs');
+      const sidebarLinks = document.querySelectorAll('.sidebar-link[data-tab]');
+      const toast = document.getElementById('toast');
+
+      // Initialize
+      document.addEventListener('DOMContentLoaded', () => {
+        loadStats();
+        loadGuests();
+        loadMessages();
+        setupEventListeners();
+        loadWhatsAppTemplate();
+      });
+
+      // Tab Navigation
+      function switchTab(tabName) {
+        tabs.forEach(tab => tab.classList.remove('active'));
+        sidebarLinks.forEach(link => link.classList.remove('active'));
+
+        document.getElementById(`${tabName}-tab`)?.classList.add('active');
+        document.querySelector(`[data-tab="${tabName}"]`)?.classList.add('active');
+      }
+
+      sidebarLinks.forEach(link => {
+        link.addEventListener('click', (e) => {
+          e.preventDefault();
+          const tab = link.dataset.tab;
+          switchTab(tab);
+          history.pushState(null, '', `#${tab}`);
+        });
+      });
+
+      // Handle initial hash
+      const initialTab = window.location.hash.slice(1) || 'dashboard';
+      switchTab(initialTab);
+
+      // Toast Notification
+      function showToast(message, type = 'success') {
+        toast.textContent = message;
+        toast.className = `toast ${type} show`;
+        setTimeout(() => {
+          toast.classList.remove('show');
+        }, 3000);
+      }
+
+      // Load Stats
+      async function loadStats() {
+        try {
+          const response = await fetch('/api/admin/guests?action=stats');
+          if (!response.ok) throw new Error('Failed to load stats');
+          const stats = await response.json();
+
+          document.getElementById('stat-total').textContent = stats.total;
+          document.getElementById('stat-confirmed').textContent = stats.confirmed;
+          document.getElementById('stat-pending').textContent = stats.pending;
+          document.getElementById('stat-declined').textContent = stats.declined;
+          document.getElementById('stat-attending').textContent = stats.totalGuests;
+        } catch (error) {
+          console.error('Error loading stats:', error);
+        }
+      }
+
+      // Load Guests
+      async function loadGuests() {
+        try {
+          const response = await fetch('/api/admin/guests');
+          if (!response.ok) throw new Error('Failed to load guests');
+          const data = await response.json();
+          guests = data.guests || [];
+          renderGuests();
+          renderRecentRSVPs();
+          renderInvitations();
+        } catch (error) {
+          console.error('Error loading guests:', error);
+        }
+      }
+
+      // Get filtered guests
+      function getFilteredGuests() {
+        const sideFilter = document.getElementById('filter-side')?.value || 'all';
+        const rsvpFilter = document.getElementById('filter-rsvp')?.value || 'all';
+        const searchFilter = document.getElementById('filter-search')?.value?.toLowerCase() || '';
+
+        return guests.filter(guest => {
+          const matchesSide = sideFilter === 'all' || guest.guest_side === sideFilter;
+          const matchesRsvp = rsvpFilter === 'all' || guest.rsvp_status === rsvpFilter;
+          const matchesSearch = !searchFilter || guest.name.toLowerCase().includes(searchFilter);
+          return matchesSide && matchesRsvp && matchesSearch;
+        });
+      }
+
+      // Get side badge HTML
+      function getSideBadge(side) {
+        const colors = {
+          groom: 'background: #BEE3F8; color: #2B6CB0;',
+          bride: 'background: #FED7E2; color: #97266D;',
+          both: 'background: #E9D8FD; color: #6B46C1;'
+        };
+        const labels = {
+          groom: "Groom's",
+          bride: "Bride's",
+          both: 'Both'
+        };
+        return `<span class="badge" style="${colors[side] || colors.both}">${labels[side] || 'Both'}</span>`;
+      }
+
+      // Render Guests Table
+      function renderGuests() {
+        const tbody = document.querySelector('#guests-table tbody');
+        const filteredGuests = getFilteredGuests();
+        
+        // Update count
+        const countEl = document.getElementById('filter-count');
+        if (countEl) {
+          countEl.textContent = `Showing ${filteredGuests.length} of ${guests.length} guests`;
+        }
+
+        if (filteredGuests.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: #718096;">No guests found</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = filteredGuests.map(guest => `
+          <tr>
+            <td>${escapeHtml(guest.name)}</td>
+            <td>${getSideBadge(guest.guest_side)}</td>
+            <td>${escapeHtml(guest.phone || '-')}</td>
+            <td>${guest.max_plus_ones || 0}</td>
+            <td>${guest.attending_count || 0}</td>
+            <td>
+              <span class="badge badge-${guest.rsvp_status === 'yes' ? 'success' : guest.rsvp_status === 'no' ? 'danger' : 'warning'}">
+                ${guest.rsvp_status === 'yes' ? 'Confirmed' : guest.rsvp_status === 'no' ? 'Declined' : 'Pending'}
+              </span>
+            </td>
+            <td>
+              <div class="copy-link">
+                <input type="text" value="${siteUrl}/rsvp/${guest.unique_code}" readonly />
+                <button class="btn btn-sm btn-secondary" onclick="copyLink('${guest.unique_code}')">Copy</button>
+              </div>
+            </td>
+            <td>
+              <span class="action-link danger" onclick="deleteGuest('${guest.id}')">Delete</span>
+            </td>
+          </tr>
+        `).join('');
+      }
+
+      // Render Recent RSVPs
+      function renderRecentRSVPs() {
+        const tbody = document.querySelector('#recent-rsvps tbody');
+        const recentGuests = guests
+          .filter(g => g.rsvp_status !== 'pending')
+          .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+          .slice(0, 10);
+
+        if (recentGuests.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: #718096;">No RSVPs yet</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = recentGuests.map(guest => `
+          <tr>
+            <td>${escapeHtml(guest.name)}</td>
+            <td>
+              <span class="badge badge-${guest.rsvp_status === 'yes' ? 'success' : 'danger'}">
+                ${guest.rsvp_status === 'yes' ? 'Confirmed' : 'Declined'}
+              </span>
+            </td>
+            <td>${guest.attending_count || 0}</td>
+            <td>${new Date(guest.updated_at).toLocaleDateString()}</td>
+          </tr>
+        `).join('');
+      }
+
+      // Load Messages
+      async function loadMessages() {
+        try {
+          const response = await fetch('/api/admin/messages');
+          if (!response.ok) throw new Error('Failed to load messages');
+          const data = await response.json();
+          messages = data.messages || [];
+          renderMessages();
+        } catch (error) {
+          console.error('Error loading messages:', error);
+        }
+      }
+
+      // Render Messages Table
+      function renderMessages() {
+        const tbody = document.querySelector('#messages-table tbody');
+        if (messages.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #718096;">No messages yet</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = messages.map(msg => `
+          <tr>
+            <td>${escapeHtml(msg.guest_name)}</td>
+            <td style="max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+              ${escapeHtml(msg.content)}
+            </td>
+            <td>
+              <label style="cursor: pointer;">
+                <input type="checkbox" ${msg.is_visible ? 'checked' : ''} onchange="toggleVisibility('${msg.id}', this.checked)" />
+              </label>
+            </td>
+            <td>${new Date(msg.created_at).toLocaleDateString()}</td>
+            <td>
+              <span class="action-link danger" onclick="deleteMessage('${msg.id}')">Delete</span>
+            </td>
+          </tr>
+        `).join('');
+      }
+
+      // Event Listeners
+      function setupEventListeners() {
+        // Logout
+        document.getElementById('logout-btn').addEventListener('click', async () => {
+          await fetch('/api/admin/logout', { method: 'POST' });
+          window.location.href = '/admin/login';
+        });
+
+        // Add Guest Modal
+        document.getElementById('add-guest-btn').addEventListener('click', () => {
+          document.getElementById('add-guest-modal').classList.add('is-open');
+        });
+
+        // Add Message Modal
+        document.getElementById('add-message-btn').addEventListener('click', () => {
+          document.getElementById('add-message-modal').classList.add('is-open');
+        });
+
+        // Close Modal
+        document.querySelectorAll('[data-close-modal]').forEach(btn => {
+          btn.addEventListener('click', () => {
+            document.querySelectorAll('.modal-overlay').forEach(modal => {
+              modal.classList.remove('is-open');
+            });
+          });
+        });
+
+        // Close modal on overlay click
+        document.querySelectorAll('.modal-overlay').forEach(overlay => {
+          overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) {
+              overlay.classList.remove('is-open');
+            }
+          });
+        });
+
+        // Add Guest Form
+        document.getElementById('add-guest-form').addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const form = e.target;
+          const formData = new FormData(form);
+
+          try {
+            const response = await fetch('/api/admin/guests', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                action: 'add',
+                guest: {
+                  name: formData.get('name'),
+                  email: formData.get('email'),
+                  phone: formData.get('phone'),
+                  guest_side: formData.get('guest_side') || 'both',
+                  invited_to: formData.get('invited_to'),
+                  max_plus_ones: parseInt(formData.get('max_plus_ones')) || 0,
+                }
+              })
+            });
+
+            if (!response.ok) throw new Error('Failed to add guest');
+
+            showToast('Guest added successfully');
+            form.reset();
+            document.getElementById('add-guest-modal').classList.remove('is-open');
+            loadGuests();
+            loadStats();
+          } catch (error) {
+            showToast('Failed to add guest', 'error');
+          }
+        });
+
+        // Add Message Form
+        document.getElementById('add-message-form').addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const form = e.target;
+          const formData = new FormData(form);
+
+          try {
+            const response = await fetch('/api/admin/messages', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                guest_name: formData.get('guest_name'),
+                content: formData.get('content'),
+              })
+            });
+
+            if (!response.ok) throw new Error('Failed to add message');
+
+            showToast('Message added successfully');
+            form.reset();
+            document.getElementById('add-message-modal').classList.remove('is-open');
+            loadMessages();
+          } catch (error) {
+            showToast('Failed to add message', 'error');
+          }
+        });
+
+        // CSV Upload
+        const csvFile = document.getElementById('csv-file');
+        csvFile.addEventListener('change', handleCSVUpload);
+        document.getElementById('import-btn').addEventListener('click', importCSV);
+        document.getElementById('cancel-import-btn').addEventListener('click', () => {
+          csvData = [];
+          document.getElementById('csv-preview').style.display = 'none';
+          document.getElementById('csv-file').value = '';
+        });
+
+        // Filter event listeners
+        document.getElementById('filter-side')?.addEventListener('change', renderGuests);
+        document.getElementById('filter-rsvp')?.addEventListener('change', renderGuests);
+        document.getElementById('filter-search')?.addEventListener('input', renderGuests);
+
+        // Invitation filter event listeners
+        document.getElementById('invite-filter-side')?.addEventListener('change', renderInvitations);
+        document.getElementById('invite-filter-phone')?.addEventListener('change', renderInvitations);
+
+        // Save WhatsApp template
+        document.getElementById('save-template-btn')?.addEventListener('click', () => {
+          const template = document.getElementById('wa-template')?.value || '';
+          localStorage.setItem('wa_template', template);
+          showToast('Template saved!');
+        });
+      }
+
+      // Copy Link
+      window.copyLink = async function(code) {
+        const link = `${siteUrl}/rsvp/${code}`;
+        try {
+          await navigator.clipboard.writeText(link);
+          showToast('Link copied to clipboard');
+        } catch (error) {
+          showToast('Failed to copy link', 'error');
+        }
+      };
+
+      // Delete Guest
+      window.deleteGuest = async function(id) {
+        if (!confirm('Are you sure you want to delete this guest?')) return;
+
+        try {
+          const response = await fetch('/api/admin/guests', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id })
+          });
+
+          if (!response.ok) throw new Error('Failed to delete guest');
+
+          showToast('Guest deleted');
+          loadGuests();
+          loadStats();
+        } catch (error) {
+          showToast('Failed to delete guest', 'error');
+        }
+      };
+
+      // Toggle Message Visibility
+      window.toggleVisibility = async function(id, isVisible) {
+        try {
+          const response = await fetch('/api/admin/messages', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id, is_visible: isVisible })
+          });
+
+          if (!response.ok) throw new Error('Failed to update message');
+          showToast('Message visibility updated');
+        } catch (error) {
+          showToast('Failed to update message', 'error');
+          loadMessages();
+        }
+      };
+
+      // Delete Message
+      window.deleteMessage = async function(id) {
+        if (!confirm('Are you sure you want to delete this message?')) return;
+
+        try {
+          const response = await fetch('/api/admin/messages', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id })
+          });
+
+          if (!response.ok) throw new Error('Failed to delete message');
+
+          showToast('Message deleted');
+          loadMessages();
+        } catch (error) {
+          showToast('Failed to delete message', 'error');
+        }
+      };
+
+      // CSV Upload Handler
+      function handleCSVUpload(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(event) {
+          const text = event.target.result;
+          csvData = parseCSV(text);
+
+          if (csvData.length === 0) {
+            showToast('No valid data found in CSV', 'error');
+            return;
+          }
+
+          renderCSVPreview();
+          document.getElementById('csv-preview').style.display = 'block';
+        };
+        reader.readAsText(file);
+      }
+
+      // Parse CSV
+      function parseCSV(text) {
+        const lines = text.split('\n').filter(line => line.trim());
+        if (lines.length < 2) return [];
+
+        const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+        const nameIndex = headers.indexOf('name');
+        const emailIndex = headers.indexOf('email');
+        const phoneIndex = headers.indexOf('phone');
+        const guestSideIndex = headers.indexOf('guest_side');
+        const invitedToIndex = headers.indexOf('invited_to');
+        const maxPlusOnesIndex = headers.indexOf('max_plus_ones');
+
+        if (nameIndex === -1) {
+          showToast('CSV must have a "name" column', 'error');
+          return [];
+        }
+
+        return lines.slice(1).map(line => {
+          const values = line.split(',').map(v => v.trim());
+          return {
+            name: values[nameIndex] || '',
+            email: emailIndex !== -1 ? values[emailIndex] : '',
+            phone: phoneIndex !== -1 ? values[phoneIndex] : '',
+            guest_side: guestSideIndex !== -1 ? values[guestSideIndex] : 'both',
+            invited_to: invitedToIndex !== -1 ? values[invitedToIndex] : 'both',
+            max_plus_ones: maxPlusOnesIndex !== -1 ? parseInt(values[maxPlusOnesIndex]) || 0 : 0,
+          };
+        }).filter(guest => guest.name);
+      }
+
+      // Render CSV Preview
+      function renderCSVPreview() {
+        const thead = document.querySelector('#csv-preview-table thead');
+        const tbody = document.querySelector('#csv-preview-table tbody');
+
+        thead.innerHTML = '<tr><th>Name</th><th>Phone</th><th>Side</th><th>Invited To</th><th>+1s</th></tr>';
+        tbody.innerHTML = csvData.slice(0, 10).map(guest => `
+          <tr>
+            <td>${escapeHtml(guest.name)}</td>
+            <td>${escapeHtml(guest.phone || '-')}</td>
+            <td>${escapeHtml(guest.guest_side || 'both')}</td>
+            <td>${escapeHtml(guest.invited_to)}</td>
+            <td>${guest.max_plus_ones || 0}</td>
+          </tr>
+        `).join('');
+
+        if (csvData.length > 10) {
+          tbody.innerHTML += `<tr><td colspan="5" style="text-align: center; color: #718096;">... and ${csvData.length - 10} more</td></tr>`;
+        }
+      }
+
+      // Import CSV
+      async function importCSV() {
+        if (csvData.length === 0) return;
+
+        const importBtn = document.getElementById('import-btn');
+        importBtn.disabled = true;
+        importBtn.textContent = 'Importing...';
+
+        try {
+          const response = await fetch('/api/admin/guests', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'import',
+              guests: csvData
+            })
+          });
+
+          if (!response.ok) throw new Error('Failed to import guests');
+
+          const result = await response.json();
+
+          document.getElementById('import-result').style.display = 'block';
+          document.getElementById('import-result').innerHTML = `
+            <div style="padding: 1rem; background: #C6F6D5; border-radius: 0.375rem;">
+              <p><strong>Import Complete!</strong></p>
+              <p>Successfully imported: ${result.success}</p>
+              ${result.failed > 0 ? `<p style="color: #E53E3E;">Failed: ${result.failed}</p>` : ''}
+            </div>
+          `;
+
+          csvData = [];
+          document.getElementById('csv-preview').style.display = 'none';
+          document.getElementById('csv-file').value = '';
+          loadGuests();
+          loadStats();
+        } catch (error) {
+          showToast('Failed to import guests', 'error');
+        } finally {
+          importBtn.disabled = false;
+          importBtn.textContent = 'Import Guests';
+        }
+      }
+
+      // Escape HTML
+      function escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+      }
+
+      // Load WhatsApp Template from localStorage
+      function loadWhatsAppTemplate() {
+        const saved = localStorage.getItem('wa_template');
+        const templateEl = document.getElementById('wa-template');
+        if (saved && templateEl) {
+          templateEl.value = saved;
+        }
+      }
+
+      // Get WhatsApp message for a guest
+      function getWhatsAppMessage(guest) {
+        const templateEl = document.getElementById('wa-template');
+        const template = templateEl?.value || localStorage.getItem('wa_template') || 'Hi {name}! Please RSVP at {link}';
+        const link = `${siteUrl}/rsvp/${guest.unique_code}`;
+        return template.replace(/{name}/g, guest.name).replace(/{link}/g, link);
+      }
+
+      // Generate WhatsApp link
+      function getWhatsAppLink(guest) {
+        if (!guest.phone) return null;
+        const message = encodeURIComponent(getWhatsAppMessage(guest));
+        // Clean phone number - remove spaces, dashes, etc
+        const phone = guest.phone.replace(/[^0-9+]/g, '').replace(/^\+/, '');
+        return `https://wa.me/${phone}?text=${message}`;
+      }
+
+      // Open WhatsApp
+      window.openWhatsApp = function(guestId) {
+        const guest = guests.find(g => g.id === guestId);
+        if (!guest) return;
+        
+        const link = getWhatsAppLink(guest);
+        if (link) {
+          window.open(link, '_blank');
+        } else {
+          showToast('No phone number for this guest', 'error');
+        }
+      };
+
+      // Copy WhatsApp message
+      window.copyWhatsAppMessage = async function(guestId) {
+        const guest = guests.find(g => g.id === guestId);
+        if (!guest) return;
+        
+        const message = getWhatsAppMessage(guest);
+        try {
+          await navigator.clipboard.writeText(message);
+          showToast('Message copied!');
+        } catch (error) {
+          showToast('Failed to copy message', 'error');
+        }
+      };
+
+      // Get filtered guests for invitations
+      function getFilteredInvitationGuests() {
+        const sideFilter = document.getElementById('invite-filter-side')?.value || 'all';
+        const phoneFilter = document.getElementById('invite-filter-phone')?.value || 'yes';
+
+        return guests.filter(guest => {
+          const matchesSide = sideFilter === 'all' || guest.guest_side === sideFilter;
+          const matchesPhone = phoneFilter === 'all' || (phoneFilter === 'yes' && guest.phone);
+          return matchesSide && matchesPhone;
+        });
+      }
+
+      // Render Invitations Table
+      function renderInvitations() {
+        const tbody = document.querySelector('#invitations-table tbody');
+        if (!tbody) return;
+
+        const filteredGuests = getFilteredInvitationGuests();
+        
+        // Update count
+        const countEl = document.getElementById('invite-count');
+        if (countEl) {
+          countEl.textContent = `${filteredGuests.length} guests`;
+        }
+
+        if (filteredGuests.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #718096;">No guests found</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = filteredGuests.map(guest => {
+          const hasPhone = !!guest.phone;
+          return `
+            <tr>
+              <td>${escapeHtml(guest.name)}</td>
+              <td>${getSideBadge(guest.guest_side)}</td>
+              <td>${escapeHtml(guest.phone || '-')}</td>
+              <td>
+                <span class="badge badge-${guest.rsvp_status === 'yes' ? 'success' : guest.rsvp_status === 'no' ? 'danger' : 'warning'}">
+                  ${guest.rsvp_status === 'yes' ? 'Confirmed' : guest.rsvp_status === 'no' ? 'Declined' : 'Pending'}
+                </span>
+              </td>
+              <td>
+                ${hasPhone ? `
+                  <button class="btn btn-sm btn-primary" onclick="openWhatsApp('${guest.id}')" style="background: #25D366;">
+                    <svg viewBox="0 0 24 24" fill="white" style="width: 1rem; height: 1rem; margin-right: 0.25rem;"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg>
+                    Send
+                  </button>
+                  <button class="btn btn-sm btn-secondary" onclick="copyWhatsAppMessage('${guest.id}')" style="margin-left: 0.25rem;">
+                    Copy
+                  </button>
+                ` : `
+                  <span style="color: #718096; font-size: 0.75rem;">No phone</span>
+                `}
+              </td>
+            </tr>
+          `;
+        }).join('');
+      }
+    </script>
+  </body>
+</html>

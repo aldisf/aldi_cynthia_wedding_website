@@ -1,0 +1,99 @@
+---
+import { config } from '../config';
+
+const { person1, person2 } = config.couple;
+const weddingDate = new Date(config.weddingDate);
+const formattedDate = weddingDate.toLocaleDateString('en-US', {
+  weekday: 'long',
+  year: 'numeric',
+  month: 'long',
+  day: 'numeric'
+});
+
+// Use first hero image or placeholder
+const heroImage = config.heroImages[0]?.src || '/images/hero/placeholder.jpg';
+---
+
+<section class="relative h-screen min-h-[600px] flex items-center justify-center overflow-hidden" id="hero">
+  <!-- Background Image with Parallax Effect -->
+  <div class="absolute inset-0 z-0">
+    <div
+      class="hero-bg absolute inset-0 bg-cover bg-center bg-no-repeat"
+      style={`background-image: url('${heroImage}')`}
+    >
+    </div>
+    <div class="hero-overlay absolute inset-0"></div>
+  </div>
+
+  <!-- Content -->
+  <div class="relative z-10 text-center text-white px-6">
+    <p class="text-sm md:text-base uppercase tracking-[0.3em] mb-4 opacity-90 animate-fade-in">
+      We're getting married
+    </p>
+
+    <h1 class="font-serif mb-6 animate-fade-in-delay-1">
+      <span class="block">{person1.name}</span>
+      <span class="block text-2xl md:text-4xl my-4 font-sans font-light">&</span>
+      <span class="block">{person2.name}</span>
+    </h1>
+
+    <div class="divider animate-fade-in-delay-2">
+      <span class="text-accent">&#10084;</span>
+    </div>
+
+    <p class="text-lg md:text-xl font-light tracking-wide animate-fade-in-delay-2">
+      {formattedDate}
+    </p>
+  </div>
+
+  <!-- Scroll Indicator -->
+  <div class="absolute bottom-8 left-1/2 -translate-x-1/2 text-white scroll-indicator">
+    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+    </svg>
+  </div>
+</section>
+
+<style>
+  .hero-bg {
+    transform: scale(1.1);
+    transition: transform 0.1s ease-out;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .animate-fade-in {
+    animation: fadeIn 1s ease-out forwards;
+  }
+
+  .animate-fade-in-delay-1 {
+    opacity: 0;
+    animation: fadeIn 1s ease-out 0.3s forwards;
+  }
+
+  .animate-fade-in-delay-2 {
+    opacity: 0;
+    animation: fadeIn 1s ease-out 0.6s forwards;
+  }
+</style>
+
+<script>
+  // Subtle parallax effect on hero
+  const heroBg = document.querySelector('.hero-bg') as HTMLElement;
+  if (heroBg) {
+    window.addEventListener('scroll', () => {
+      const scrolled = window.scrollY;
+      const rate = scrolled * 0.3;
+      heroBg.style.transform = `scale(1.1) translateY(${rate}px)`;
+    });
+  }
+</script>

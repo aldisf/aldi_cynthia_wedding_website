@@ -1,0 +1,357 @@
+---
+import { config } from '../config';
+
+interface Props {
+  guestCode?: string;
+  guestName?: string;
+  guestEmail?: string;
+  invitedTo?: string;
+  maxPlusOnes?: number;  // Allocated plus ones from CSV
+  existingRsvpStatus?: 'pending' | 'yes' | 'no';
+  existingAttendingCount?: number;
+  existingDietaryNotes?: string | null;
+  existingSongRequest?: string | null;
+  existingAttendingEvents?: string[];
+}
+
+const { 
+  guestCode, 
+  guestName, 
+  guestEmail, 
+  invitedTo = 'both', 
+  maxPlusOnes = 0,
+  existingRsvpStatus = 'pending',
+  existingAttendingCount = 0,
+  existingDietaryNotes = '',
+  existingSongRequest = '',
+  existingAttendingEvents = []
+} = Astro.props;
+
+const { deadline, askDietaryRestrictions, askSongRequest } = config.rsvp;
+
+const hasValidCode = !!guestCode;
+const hasExistingRsvp = existingRsvpStatus !== 'pending';
+const deadlineDate = new Date(deadline);
+const formattedDeadline = deadlineDate.toLocaleDateString('en-US', {
+  year: 'numeric',
+  month: 'long',
+  day: 'numeric'
+});
+
+// Total possible attendees (guest + their plus ones)
+const maxAttendees = 1 + maxPlusOnes;
+
+// Determine initial state for showing attending-only fields
+const showAttendingFields = existingRsvpStatus === 'yes' || existingAttendingCount > 0;
+---
+
+<section class="section" id="rsvp">
+  <div class="container">
+    <div class="text-center animate-on-scroll">
+      <h2 class="section-title">RSVP</h2>
+      <p class="section-subtitle">
+        {hasValidCode
+          ? `Please let us know if you can make it by ${formattedDeadline}`
+          : 'Please use your unique invitation link to RSVP'
+        }
+      </p>
+    </div>
+
+    <div class="max-w-xl mx-auto">
+      {hasValidCode ? (
+        <form id="rsvp-form" class="bg-secondary p-6 md:p-8 animate-on-scroll" data-max-attendees={maxAttendees}>
+          <input type="hidden" name="guestCode" value={guestCode} />
+          <input type="hidden" name="maxPlusOnes" value={maxPlusOnes} />
+
+          {/* Guest Name */}
+          <div class="mb-6">
+            <label class="form-label">Your Name</label>
+            <input
+              type="text"
+              name="name"
+              class="form-input"
+              value={guestName || ''}
+              readonly={!!guestName}
+              required
+            />
+          </div>
+
+          {/* Email */}
+          <div class="mb-6">
+            <label class="form-label">Email Address</label>
+            <input
+              type="email"
+              name="email"
+              class="form-input"
+              value={guestEmail || ''}
+              placeholder="your@email.com"
+            />
+          </div>
+
+          {/* Attendance - Different UI based on whether they have plus ones */}
+          {maxPlusOnes > 0 ? (
+            /* Guest has allocated plus ones - show attending count selector */
+            <div class="mb-6">
+              <label class="form-label">How many people will be attending?</label>
+              <p class="text-sm text-muted mb-3">
+                You have been allocated {maxPlusOnes} additional guest{maxPlusOnes > 1 ? 's' : ''}.
+              </p>
+              <select name="attendingCount" class="form-input" id="attending-count-select">
+                <option value="0" selected={existingAttendingCount === 0}>Not attending (0 people)</option>
+                {Array.from({ length: maxAttendees }, (_, i) => (
+                  <option value={i + 1} selected={existingAttendingCount === i + 1}>
+                    {i + 1} {i + 1 === 1 ? 'person' : 'people'} attending
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            /* No plus ones - simple yes/no */
+            <div class="mb-6">
+              <label class="form-label">Will you be attending?</label>
+              <div class="grid grid-cols-2 gap-4 mt-2">
+                <label class="rsvp-option">
+                  <input type="radio" name="attending" value="yes" class="sr-only" required checked={existingRsvpStatus === 'yes'} />
+                  <div class="rsvp-option-box">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span>Joyfully Accept</span>
+                  </div>
+                </label>
+                <label class="rsvp-option">
+                  <input type="radio" name="attending" value="no" class="sr-only" required checked={existingRsvpStatus === 'no'} />
+                  <div class="rsvp-option-box">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                    <span>Regretfully Decline</span>
+                  </div>
+                </label>
+              </div>
+            </div>
+          )}
+
+          {/* Events Selection */}
+          {invitedTo === 'both' && (
+            <div class={`mb-6 rsvp-attending-only ${showAttendingFields ? 'show' : ''}`}>
+              <label class="form-label">Which events will you attend?</label>
+              <div class="space-y-2 mt-2">
+                <label class="flex items-center gap-3">
+                  <input 
+                    type="checkbox" 
+                    name="events" 
+                    value="ceremony" 
+                    checked={existingAttendingEvents.length === 0 || existingAttendingEvents.includes('ceremony')} 
+                    class="w-4 h-4" 
+                  />
+                  <span>Holy Matrimony</span>
+                </label>
+                <label class="flex items-center gap-3">
+                  <input 
+                    type="checkbox" 
+                    name="events" 
+                    value="reception" 
+                    checked={existingAttendingEvents.length === 0 || existingAttendingEvents.includes('reception')} 
+                    class="w-4 h-4" 
+                  />
+                  <span>Reception & Dinner</span>
+                </label>
+              </div>
+            </div>
+          )}
+
+          {/* Dietary Restrictions */}
+          {askDietaryRestrictions && (
+            <div class={`mb-6 rsvp-attending-only ${showAttendingFields ? 'show' : ''}`}>
+              <label class="form-label">Dietary Restrictions or Allergies</label>
+              <textarea
+                name="dietary"
+                class="form-textarea"
+                rows="2"
+                placeholder="Please let us know of any dietary requirements..."
+              >{existingDietaryNotes || ''}</textarea>
+            </div>
+          )}
+
+          {/* Song Request */}
+          {askSongRequest && (
+            <div class={`mb-6 rsvp-attending-only ${showAttendingFields ? 'show' : ''}`}>
+              <label class="form-label">Song Request (Optional)</label>
+              <input
+                type="text"
+                name="songRequest"
+                class="form-input"
+                placeholder="What song will get you on the dance floor?"
+                value={existingSongRequest || ''}
+              />
+            </div>
+          )}
+
+          {/* Submit */}
+          <button type="submit" class="btn btn-primary w-full">
+            {hasExistingRsvp ? 'Update RSVP' : 'Submit RSVP'}
+          </button>
+
+          <p id="rsvp-status" class="mt-4 text-sm text-center hidden"></p>
+        </form>
+      ) : (
+        <div class="text-center py-12 bg-secondary animate-on-scroll">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-16 h-16 mx-auto mb-4 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+          </svg>
+          <p class="text-muted mb-4">
+            Check your email or message for your personal invitation link.
+          </p>
+          <p class="text-sm text-muted">
+            If you haven't received an invitation, please contact us directly.
+          </p>
+        </div>
+      )}
+    </div>
+  </div>
+</section>
+
+<style>
+  .rsvp-option-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 1.5rem 1rem;
+    background-color: white;
+    border: 2px solid #e2e8f0;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-align: center;
+  }
+
+  .rsvp-option input:checked + .rsvp-option-box {
+    border-color: var(--color-primary);
+    background-color: rgba(135, 168, 120, 0.1);
+  }
+
+  .rsvp-option-box:hover {
+    border-color: var(--color-primary);
+  }
+
+  .rsvp-attending-only {
+    display: none;
+  }
+
+  .rsvp-attending-only.show {
+    display: block;
+  }
+</style>
+
+<script>
+  const rsvpForm = document.getElementById('rsvp-form') as HTMLFormElement;
+  const rsvpStatus = document.getElementById('rsvp-status');
+  const attendingRadios = document.querySelectorAll('input[name="attending"]');
+  const attendingCountSelect = document.getElementById('attending-count-select') as HTMLSelectElement;
+  const attendingOnlyFields = document.querySelectorAll('.rsvp-attending-only');
+
+  // For guests without plus ones: Show/hide fields based on attendance selection
+  attendingRadios.forEach(radio => {
+    radio.addEventListener('change', (e) => {
+      const target = e.target as HTMLInputElement;
+      const isAttending = target.value === 'yes';
+
+      attendingOnlyFields.forEach(field => {
+        if (isAttending) {
+          field.classList.add('show');
+        } else {
+          field.classList.remove('show');
+        }
+      });
+    });
+  });
+
+  // For guests with plus ones: Show/hide fields based on attending count
+  if (attendingCountSelect) {
+    attendingCountSelect.addEventListener('change', () => {
+      const count = parseInt(attendingCountSelect.value) || 0;
+      const isAttending = count > 0;
+
+      attendingOnlyFields.forEach(field => {
+        if (isAttending) {
+          field.classList.add('show');
+        } else {
+          field.classList.remove('show');
+        }
+      });
+    });
+  }
+
+  // Handle form submission
+  if (rsvpForm) {
+    rsvpForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const formData = new FormData(rsvpForm);
+      const maxPlusOnes = parseInt(formData.get('maxPlusOnes') as string) || 0;
+
+      // Get selected events as array
+      const events: string[] = [];
+      formData.getAll('events').forEach(event => events.push(event as string));
+
+      // Determine attending status and count based on form type
+      let attending: string;
+      let attendingCount: number;
+
+      if (maxPlusOnes > 0) {
+        // Guest has plus ones - use the dropdown
+        attendingCount = parseInt(formData.get('attendingCount') as string) || 0;
+        attending = attendingCount > 0 ? 'yes' : 'no';
+      } else {
+        // No plus ones - use the radio buttons
+        attending = formData.get('attending') as string;
+        attendingCount = attending === 'yes' ? 1 : 0;
+      }
+
+      const data = {
+        guestCode: formData.get('guestCode'),
+        name: formData.get('name'),
+        email: formData.get('email'),
+        attending,
+        attendingCount,
+        events: events,
+        dietary: formData.get('dietary'),
+        songRequest: formData.get('songRequest')
+      };
+
+      if (!rsvpStatus) return;
+
+      try {
+        rsvpStatus.className = 'mt-4 text-sm text-center text-muted';
+        rsvpStatus.textContent = 'Submitting...';
+        rsvpStatus.classList.remove('hidden');
+
+        const response = await fetch('/api/rsvp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.message || 'Failed to submit RSVP');
+        }
+
+        const result = await response.json();
+
+        rsvpStatus.className = 'mt-4 text-sm text-center text-primary';
+        rsvpStatus.textContent = data.attending === 'yes'
+          ? 'Thank you! We look forward to celebrating with you!'
+          : 'Thank you for letting us know. You will be missed!';
+
+        // Disable form after successful submission
+        const inputs = rsvpForm.querySelectorAll('input, select, textarea, button');
+        inputs.forEach(input => (input as HTMLInputElement).disabled = true);
+
+      } catch (error) {
+        rsvpStatus.className = 'mt-4 text-sm text-center text-red-500';
+        rsvpStatus.textContent = error instanceof Error ? error.message : 'An error occurred';
+      }
+    });
+  }
+</script>

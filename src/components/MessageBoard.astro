@@ -1,0 +1,215 @@
+---
+import { config } from '../config';
+
+interface Props {
+  guestCode?: string;
+  guestName?: string;
+}
+
+const { guestCode, guestName } = Astro.props;
+const { title, subtitle } = config.messageBoard;
+const canPost = !!guestCode;
+---
+
+<section class="section" id="messages">
+  <div class="container">
+    <div class="text-center animate-on-scroll">
+      <h2 class="section-title">{title}</h2>
+      <p class="section-subtitle">{subtitle}</p>
+    </div>
+
+    <div class="max-w-4xl mx-auto">
+      {/* Message Form - Only for guests with unique link */}
+      {canPost && (
+        <div class="mb-12 animate-on-scroll">
+          <form id="message-form" class="bg-secondary p-6 md:p-8">
+            <input type="hidden" name="guestCode" value={guestCode} />
+            <div class="mb-4">
+              <label class="form-label">Your Name</label>
+              <input
+                type="text"
+                name="name"
+                class="form-input"
+                value={guestName || ''}
+                readonly={!!guestName}
+                required
+              />
+            </div>
+            <div class="mb-4">
+              <label class="form-label">Your Message</label>
+              <textarea
+                name="message"
+                class="form-textarea"
+                placeholder="Write your wishes for the couple..."
+                required
+              ></textarea>
+            </div>
+            <button type="submit" class="btn btn-primary w-full md:w-auto">
+              Send Wishes
+            </button>
+            <p id="form-status" class="mt-4 text-sm hidden"></p>
+          </form>
+        </div>
+      )}
+
+      {/* Messages Display */}
+      <div id="messages-container" class="space-y-6">
+        <div class="text-center py-8 text-muted">
+          <p>Loading messages...</p>
+        </div>
+      </div>
+
+      {/* Load More Button */}
+      <div class="text-center mt-8 hidden" id="load-more-container">
+        <button class="btn btn-outline" id="load-more-btn">
+          Load More Messages
+        </button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+  interface Message {
+    id: string;
+    content: string;
+    guest_name: string;
+    created_at: string;
+  }
+
+  const messagesContainer = document.getElementById('messages-container');
+  const messageForm = document.getElementById('message-form') as HTMLFormElement;
+  const formStatus = document.getElementById('form-status');
+  const loadMoreContainer = document.getElementById('load-more-container');
+  const loadMoreBtn = document.getElementById('load-more-btn');
+
+  let currentPage = 0;
+  const pageSize = 10;
+
+  // Fetch messages from API
+  async function fetchMessages(page = 0) {
+    try {
+      const response = await fetch(`/api/messages?page=${page}&limit=${pageSize}`);
+      if (!response.ok) throw new Error('Failed to fetch messages');
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching messages:', error);
+      return { messages: [], hasMore: false };
+    }
+  }
+
+  // Render a single message
+  function renderMessage(message: Message): string {
+    const date = new Date(message.created_at).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+
+    return `
+      <div class="message-card animate-on-scroll is-visible">
+        <p class="message-content">"${escapeHtml(message.content)}"</p>
+        <p class="message-author">
+          <span class="font-medium">${escapeHtml(message.guest_name)}</span>
+          <span class="mx-2">&bull;</span>
+          <span>${date}</span>
+        </p>
+      </div>
+    `;
+  }
+
+  // Escape HTML to prevent XSS
+  function escapeHtml(text: string): string {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  // Load initial messages
+  async function loadMessages() {
+    if (!messagesContainer) return;
+
+    const { messages, hasMore } = await fetchMessages(0);
+
+    if (messages.length === 0) {
+      messagesContainer.innerHTML = `
+        <div class="text-center py-8 text-muted">
+          <p>Be the first to leave a message!</p>
+        </div>
+      `;
+    } else {
+      messagesContainer.innerHTML = messages.map(renderMessage).join('');
+    }
+
+    if (hasMore && loadMoreContainer) {
+      loadMoreContainer.classList.remove('hidden');
+    }
+  }
+
+  // Load more messages
+  async function loadMoreMessages() {
+    if (!messagesContainer || !loadMoreContainer) return;
+
+    currentPage++;
+    const { messages, hasMore } = await fetchMessages(currentPage);
+
+    messages.forEach((message: Message) => {
+      messagesContainer.insertAdjacentHTML('beforeend', renderMessage(message));
+    });
+
+    if (!hasMore) {
+      loadMoreContainer.classList.add('hidden');
+    }
+  }
+
+  // Handle form submission
+  async function handleSubmit(e: Event) {
+    e.preventDefault();
+    if (!messageForm || !formStatus) return;
+
+    const formData = new FormData(messageForm);
+    const data = {
+      guestCode: formData.get('guestCode'),
+      name: formData.get('name'),
+      message: formData.get('message')
+    };
+
+    try {
+      formStatus.className = 'mt-4 text-sm text-muted';
+      formStatus.textContent = 'Sending...';
+      formStatus.classList.remove('hidden');
+
+      const response = await fetch('/api/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to send message');
+      }
+
+      formStatus.className = 'mt-4 text-sm text-primary';
+      formStatus.textContent = 'Thank you for your wishes!';
+      messageForm.reset();
+
+      // Reload messages to show the new one
+      await loadMessages();
+    } catch (error) {
+      formStatus.className = 'mt-4 text-sm text-red-500';
+      formStatus.textContent = error instanceof Error ? error.message : 'An error occurred';
+    }
+  }
+
+  // Initialize
+  loadMessages();
+
+  if (messageForm) {
+    messageForm.addEventListener('submit', handleSubmit);
+  }
+
+  if (loadMoreBtn) {
+    loadMoreBtn.addEventListener('click', loadMoreMessages);
+  }
+</script>

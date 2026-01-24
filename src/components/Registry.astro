@@ -1,0 +1,76 @@
+---
+import { config } from '../config';
+
+const { enabled, message, items } = config.registry;
+---
+
+{enabled && (
+  <section class="section bg-secondary" id="registry">
+    <div class="container">
+      <div class="text-center animate-on-scroll">
+        <h2 class="section-title">Gift Registry</h2>
+        <p class="section-subtitle">{message}</p>
+      </div>
+
+      <div class="max-w-4xl mx-auto">
+        <div class="grid md:grid-cols-2 gap-6">
+          {items.map((item, index) => (
+            <div
+              class="bg-white p-6 shadow-sm animate-on-scroll"
+              style={`transition-delay: ${index * 100}ms`}
+            >
+              {item.image && (
+                <div class="aspect-video bg-gray-100 mb-4 overflow-hidden">
+                  <img
+                    src={item.image}
+                    alt={item.name}
+                    class="w-full h-full object-cover"
+                    loading="lazy"
+                    onerror="this.parentElement.classList.add('hidden')"
+                  />
+                </div>
+              )}
+
+              <h3 class="font-serif text-xl mb-2">{item.name}</h3>
+              <p class="text-muted text-sm mb-4">{item.description}</p>
+
+              {item.targetAmount && (
+                <div class="mb-4">
+                  <div class="flex justify-between text-sm mb-1">
+                    <span class="text-muted">Goal</span>
+                    <span class="font-medium">${item.targetAmount.toLocaleString()}</span>
+                  </div>
+                </div>
+              )}
+
+              {item.link && (
+                <a
+                  href={item.link}
+                  target={item.external ? '_blank' : undefined}
+                  rel={item.external ? 'noopener noreferrer' : undefined}
+                  class="btn btn-outline w-full"
+                >
+                  {item.external ? 'View Registry' : 'Contribute'}
+                  {item.external && (
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                  )}
+                </a>
+              )}
+            </div>
+          ))}
+        </div>
+
+        <div class="mt-12 text-center animate-on-scroll">
+          <div class="divider">
+            <span class="text-accent">&hearts;</span>
+          </div>
+          <p class="text-muted text-sm mt-4">
+            Your presence at our wedding is the greatest gift of all.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+)}

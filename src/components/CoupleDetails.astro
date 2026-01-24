@@ -1,0 +1,67 @@
+---
+import { config } from '../config';
+
+const { person1, person2 } = config.couple;
+---
+
+<section class="section" id="story">
+  <div class="container">
+    <div class="text-center animate-on-scroll">
+      <h2 class="section-title">Our Story</h2>
+      <p class="section-subtitle">Two hearts, one love</p>
+    </div>
+
+    <div class="max-w-4xl mx-auto">
+      <div class="grid md:grid-cols-2 gap-12 md:gap-16">
+        <!-- Person 1 -->
+        <div class="text-center slide-from-left">
+          <div class="w-48 h-48 mx-auto mb-6 rounded-full overflow-hidden bg-secondary">
+            <img
+              src="/images/person1.jpg"
+              alt={person1.fullName}
+              class="w-full h-full object-cover"
+              onerror="this.style.display='none'"
+            />
+          </div>
+          <h3 class="font-serif text-2xl mb-2">{person1.fullName}</h3>
+          <p class="text-muted text-sm uppercase tracking-wider mb-4">The Groom</p>
+          <p class="text-muted text-sm">
+            Son of<br />
+            <span class="text-text">{person1.parents}</span>
+          </p>
+        </div>
+
+        <!-- Person 2 -->
+        <div class="text-center slide-from-right">
+          <div class="w-48 h-48 mx-auto mb-6 rounded-full overflow-hidden bg-secondary">
+            <img
+              src="/images/person2.jpg"
+              alt={person2.fullName}
+              class="w-full h-full object-cover"
+              onerror="this.style.display='none'"
+            />
+          </div>
+          <h3 class="font-serif text-2xl mb-2">{person2.fullName}</h3>
+          <p class="text-muted text-sm uppercase tracking-wider mb-4">The Bride</p>
+          <p class="text-muted text-sm">
+            Daughter of<br />
+            <span class="text-text">{person2.parents}</span>
+          </p>
+        </div>
+      </div>
+
+      <!-- Optional Love Story -->
+      <div class="mt-16 text-center animate-on-scroll">
+        <div class="divider">
+          <span class="text-accent font-serif text-xl">&hearts;</span>
+        </div>
+        <p class="text-muted max-w-2xl mx-auto leading-relaxed mt-6">
+          <!-- You can add your love story here -->
+          We met and knew that our lives would never be the same.
+          Now, we're excited to start this new chapter together and
+          we would be honored to have you celebrate with us.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
