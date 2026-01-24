@@ -20,7 +20,7 @@ export const config = {
 
   // ---- WEDDING DATE ----
   // Format: YYYY-MM-DDTHH:mm:ss
-  weddingDate: "2025-06-15T10:00:00",
+  weddingDate: "2026-11-14T13:00:00",
 
   // ---- EVENTS TIMELINE ----
   events: [

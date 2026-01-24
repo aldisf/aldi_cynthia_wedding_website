@@ -53,7 +53,7 @@ const canPost = !!guestCode;
       )}
 
       {/* Messages Display */}
-      <div id="messages-container" class="space-y-6">
+      <div id="messages-container" class="messages-grid">
         <div class="text-center py-8 text-muted">
           <p>Loading messages...</p>
         </div>
@@ -68,6 +68,32 @@ const canPost = !!guestCode;
     </div>
   </div>
 </section>
+
+<style>
+  .messages-grid {
+    display: grid;
+    gap: 1.5rem;
+    transition: opacity 0.5s ease-in-out;
+  }
+
+  .messages-grid.fade-out {
+    opacity: 0;
+  }
+
+  .messages-grid.fade-in {
+    opacity: 1;
+  }
+
+  .messages-grid :global(.message-card) {
+    transition: transform 0.3s ease, opacity 0.5s ease-in-out;
+  }
+
+  @media (min-width: 768px) {
+    .messages-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+</style>
 
 <script>
   interface Message {
@@ -85,6 +111,9 @@ const canPost = !!guestCode;
 
   let currentPage = 0;
   const pageSize = 10;
+  let allMessages: Message[] = [];
+  let shuffleIntervalId: ReturnType<typeof setInterval> | null = null;
+  const SHUFFLE_INTERVAL = 8000; // 8 seconds
 
   // Fetch messages from API
   async function fetchMessages(page = 0) {
@@ -125,24 +154,83 @@ const canPost = !!guestCode;
     return div.innerHTML;
   }
 
-  // Load initial messages
-  async function loadMessages() {
-    if (!messagesContainer) return;
+  // Fisher-Yates shuffle algorithm
+  function shuffleArray<T>(array: T[]): T[] {
+    const shuffled = [...array];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+  }
 
-    const { messages, hasMore } = await fetchMessages(0);
+  // Render all messages
+  function renderMessages(messages: Message[]) {
+    if (!messagesContainer) return;
 
     if (messages.length === 0) {
       messagesContainer.innerHTML = `
-        <div class="text-center py-8 text-muted">
+        <div class="text-center py-8 text-muted" style="grid-column: 1 / -1;">
           <p>Be the first to leave a message!</p>
         </div>
       `;
     } else {
       messagesContainer.innerHTML = messages.map(renderMessage).join('');
     }
+  }
+
+  // Shuffle messages with fade animation
+  async function shuffleMessages() {
+    if (!messagesContainer || allMessages.length <= 1) return;
+
+    // Fade out
+    messagesContainer.classList.add('fade-out');
+    messagesContainer.classList.remove('fade-in');
+
+    // Wait for fade out animation
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    // Shuffle and re-render
+    allMessages = shuffleArray(allMessages);
+    renderMessages(allMessages);
+
+    // Fade in
+    messagesContainer.classList.remove('fade-out');
+    messagesContainer.classList.add('fade-in');
+  }
+
+  // Start auto-shuffle
+  function startAutoShuffle() {
+    stopAutoShuffle();
+    shuffleIntervalId = setInterval(() => {
+      shuffleMessages();
+    }, SHUFFLE_INTERVAL);
+  }
+
+  // Stop auto-shuffle
+  function stopAutoShuffle() {
+    if (shuffleIntervalId) {
+      clearInterval(shuffleIntervalId);
+      shuffleIntervalId = null;
+    }
+  }
+
+  // Load initial messages
+  async function loadMessages() {
+    if (!messagesContainer) return;
+
+    const { messages, hasMore } = await fetchMessages(0);
+    allMessages = messages;
+
+    renderMessages(allMessages);
 
     if (hasMore && loadMoreContainer) {
       loadMoreContainer.classList.remove('hidden');
+    }
+
+    // Start auto-shuffle if we have multiple messages
+    if (allMessages.length > 1) {
+      startAutoShuffle();
     }
   }
 
@@ -153,12 +241,19 @@ const canPost = !!guestCode;
     currentPage++;
     const { messages, hasMore } = await fetchMessages(currentPage);
 
-    messages.forEach((message: Message) => {
-      messagesContainer.insertAdjacentHTML('beforeend', renderMessage(message));
-    });
+    // Add to allMessages array
+    allMessages = [...allMessages, ...messages];
+
+    // Render all messages
+    renderMessages(allMessages);
 
     if (!hasMore) {
       loadMoreContainer.classList.add('hidden');
+    }
+
+    // Restart auto-shuffle timer if we have multiple messages
+    if (allMessages.length > 1) {
+      startAutoShuffle();
     }
   }
 
@@ -195,6 +290,7 @@ const canPost = !!guestCode;
       messageForm.reset();
 
       // Reload messages to show the new one
+      currentPage = 0;
       await loadMessages();
     } catch (error) {
       formStatus.className = 'mt-4 text-sm text-red-500';
@@ -212,4 +308,9 @@ const canPost = !!guestCode;
   if (loadMoreBtn) {
     loadMoreBtn.addEventListener('click', loadMoreMessages);
   }
+
+  // Cleanup on page navigation
+  document.addEventListener('astro:before-swap', () => {
+    stopAutoShuffle();
+  });
 </script>
