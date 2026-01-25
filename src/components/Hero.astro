@@ -10,38 +10,58 @@ const formattedDate = weddingDate.toLocaleDateString('en-US', {
   day: 'numeric'
 });
 
-// Use first hero image or placeholder
-const heroImage = config.heroImages[0]?.src || '/images/hero/placeholder.jpg';
+// Get all hero images
+const heroImages = config.heroImages;
+
+// Get font sizes from config
+const fonts = config.heroFontSizes;
 ---
 
-<section class="relative h-screen min-h-[600px] flex items-center justify-center overflow-hidden" id="hero">
-  <!-- Background Image with Parallax Effect -->
+<section
+  class="relative h-screen min-h-[600px] flex items-center justify-center md:justify-start overflow-hidden"
+  id="hero"
+  style={`
+    --hero-tagline-mobile: ${fonts.tagline.mobile};
+    --hero-tagline-desktop: ${fonts.tagline.desktop};
+    --hero-names-mobile: ${fonts.names.mobile};
+    --hero-names-desktop: ${fonts.names.desktop};
+    --hero-ampersand-mobile: ${fonts.ampersand.mobile};
+    --hero-ampersand-desktop: ${fonts.ampersand.desktop};
+    --hero-date-mobile: ${fonts.date.mobile};
+    --hero-date-desktop: ${fonts.date.desktop};
+  `}
+>
+  <!-- Background Images Slideshow -->
   <div class="absolute inset-0 z-0">
-    <div
-      class="hero-bg absolute inset-0 bg-cover bg-center bg-no-repeat"
-      style={`background-image: url('${heroImage}')`}
-    >
-    </div>
+    {heroImages.map((image, index) => (
+      <div
+        class={`hero-slide absolute inset-0 bg-cover bg-center bg-no-repeat transition-opacity duration-1000 ${index === 0 ? 'opacity-100' : 'opacity-0'}`}
+        style={`background-image: url('${image.src}')`}
+        data-slide-index={index}
+      >
+      </div>
+    ))}
     <div class="hero-overlay absolute inset-0"></div>
   </div>
 
   <!-- Content -->
-  <div class="relative z-10 text-center text-white px-6">
-    <p class="text-sm md:text-base uppercase tracking-[0.3em] mb-4 opacity-90 animate-fade-in">
+  <div class="relative z-10 text-center md:text-left text-white px-6 md:px-16 lg:px-24">
+    <p class="hero-tagline uppercase tracking-[0.3em] mb-4 opacity-90 animate-fade-in">
       We're getting married
     </p>
 
     <h1 class="font-serif mb-6 animate-fade-in-delay-1">
-      <span class="block">{person1.name}</span>
-      <span class="block text-2xl md:text-4xl my-4 font-sans font-light">&</span>
-      <span class="block">{person2.name}</span>
+      <span class="hero-names block">{person1.name}</span>
+      <span class="hero-ampersand block my-4 font-sans font-light">&</span>
+      <span class="hero-names block">{person2.name}</span>
     </h1>
 
-    <div class="divider animate-fade-in-delay-2">
+    <div class="hero-divider flex items-center gap-4 justify-center md:justify-start my-8 animate-fade-in-delay-2">
       <span class="text-accent">&#10084;</span>
+      <div class="w-16 md:w-24 h-px bg-accent"></div>
     </div>
 
-    <p class="text-lg md:text-xl font-light tracking-wide animate-fade-in-delay-2">
+    <p class="hero-date font-light tracking-wide animate-fade-in-delay-2">
       {formattedDate}
     </p>
   </div>
@@ -55,9 +75,44 @@ const heroImage = config.heroImages[0]?.src || '/images/hero/placeholder.jpg';
 </section>
 
 <style>
-  .hero-bg {
+  .hero-slide {
     transform: scale(1.1);
-    transition: transform 0.1s ease-out;
+    transition: opacity 1s ease-in-out, transform 0.1s ease-out;
+  }
+
+  .hero-tagline {
+    font-size: var(--hero-tagline-mobile);
+  }
+
+  .hero-names {
+    font-size: var(--hero-names-mobile);
+    line-height: 1.1;
+  }
+
+  .hero-ampersand {
+    font-size: var(--hero-ampersand-mobile);
+  }
+
+  .hero-date {
+    font-size: var(--hero-date-mobile);
+  }
+
+  @media (min-width: 768px) {
+    .hero-tagline {
+      font-size: var(--hero-tagline-desktop);
+    }
+
+    .hero-names {
+      font-size: var(--hero-names-desktop);
+    }
+
+    .hero-ampersand {
+      font-size: var(--hero-ampersand-desktop);
+    }
+
+    .hero-date {
+      font-size: var(--hero-date-desktop);
+    }
   }
 
   @keyframes fadeIn {
@@ -87,13 +142,39 @@ const heroImage = config.heroImages[0]?.src || '/images/hero/placeholder.jpg';
 </style>
 
 <script>
-  // Subtle parallax effect on hero
-  const heroBg = document.querySelector('.hero-bg') as HTMLElement;
-  if (heroBg) {
+  // Hero slideshow
+  const slides = document.querySelectorAll('.hero-slide') as NodeListOf<HTMLElement>;
+  let currentSlide = 0;
+  const slideInterval = 5000; // Change image every 5 seconds
+
+  function nextSlide() {
+    if (slides.length <= 1) return;
+
+    // Fade out current slide
+    slides[currentSlide].classList.remove('opacity-100');
+    slides[currentSlide].classList.add('opacity-0');
+
+    // Move to next slide
+    currentSlide = (currentSlide + 1) % slides.length;
+
+    // Fade in next slide
+    slides[currentSlide].classList.remove('opacity-0');
+    slides[currentSlide].classList.add('opacity-100');
+  }
+
+  // Start slideshow if there are multiple images
+  if (slides.length > 1) {
+    setInterval(nextSlide, slideInterval);
+  }
+
+  // Subtle parallax effect on all slides
+  if (slides.length > 0) {
     window.addEventListener('scroll', () => {
       const scrolled = window.scrollY;
       const rate = scrolled * 0.3;
-      heroBg.style.transform = `scale(1.1) translateY(${rate}px)`;
+      slides.forEach(slide => {
+        slide.style.transform = `scale(1.1) translateY(${rate}px)`;
+      });
     });
   }
 </script>

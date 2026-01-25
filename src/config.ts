@@ -22,6 +22,8 @@ export const config = {
   // Format: YYYY-MM-DDTHH:mm:ss
   weddingDate: "2026-11-14T13:00:00",
 
+
+
   // ---- EVENTS TIMELINE ----
   events: [
     {
@@ -33,7 +35,7 @@ export const config = {
       address: "123 Church Street, City",
       description: "Join us as we exchange our vows",
       icon: "church",
-      mapsEmbed: "https://www.google.com/maps/embed?pb=!1m18!...", // Replace with actual embed URL
+      mapsEmbed: "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3961.2988068457107!2d107.5925410750197!3d-6.854742793143652!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x2e68e6b7af9b3289%3A0x72b029ec1dd0124a!2sGrand%20Mercure%20Bandung%20Setiabudi!5e0!3m2!1sen!2sid!4v1769332704886!5m2!1sen!2sid", // Replace with actual embed URL
       mapsLink: "https://maps.google.com/?q=...", // Replace with actual link
     },
     {
@@ -79,7 +81,7 @@ export const config = {
   // ---- GALLERY ----
   // Add your prewedding photo URLs here
   gallery: [
-    { src: "/images/gallery/photo1.jpg", alt: "Prewedding photo 1" },
+    { src: "https://media.cntraveler.com/photos/68ff82e7977accaf27ac5b35/16:9/w_2560%2Cc_limit/GettyImages-2078516558.jpg", alt: "Prewedding photo 1" },
     { src: "/images/gallery/photo2.jpg", alt: "Prewedding photo 2" },
     { src: "/images/gallery/photo3.jpg", alt: "Prewedding photo 3" },
     { src: "/images/gallery/photo4.jpg", alt: "Prewedding photo 4" },
@@ -90,10 +92,19 @@ export const config = {
   // ---- HERO IMAGES ----
   // Main hero section images (for slideshow)
   heroImages: [
-    { src: "/images/hero/hero1.jpg", alt: "Hero image 1" },
-    { src: "/images/hero/hero2.jpg", alt: "Hero image 2" },
-    { src: "/images/hero/hero3.jpg", alt: "Hero image 3" },
+    { src: "https://media.cntraveler.com/photos/68ff82e7977accaf27ac5b35/16:9/w_2560%2Cc_limit/GettyImages-2078516558.jpg", alt: "Hero image 1" },
+    { src: "https://thumbs.dreamstime.com/b/autumn-leaves-wet-stone-pathway-park-beautiful-fall-season-weather-night-concept-melancholy-rain-scene-wallpaper-395389772.jpg", alt: "Hero image 2" },
+    { src: "https://img.freepik.com/free-photo/fuji-mountain-with-milky-way-night_335224-104.jpg", alt: "Hero image 3" },
   ],
+
+  // ---- HERO FONT SIZES ----
+  // Customize the hero section font sizes (mobile / desktop)
+  heroFontSizes: {
+    tagline: { mobile: "0.875rem", desktop: "1.125rem" },      // "We're getting married"
+    names: { mobile: "3.5rem", desktop: "5rem" },              // Couple names
+    ampersand: { mobile: "1.75rem", desktop: "2.5rem" },       // "&" symbol
+    date: { mobile: "1.25rem", desktop: "1.5rem" },            // Wedding date
+  },
 
   // ---- WEDDING REGISTRY ----
   registry: {
@@ -124,6 +135,39 @@ export const config = {
     title: "Wishes & Messages",
     subtitle: "Leave your heartfelt wishes for the couple",
   },
+
+  // ---- ACCOMMODATIONS ----
+  // Hotels near the venue for overseas guests
+  accommodations: [
+    {
+      name: "Grand Mercure Setiabudi",
+      address: "Jl. Dr. Setiabudi No.269 275, Isola, Kec. Sukasari, Kota Bandung, Jawa Barat 40154",
+      distance: "2 km from venue",
+      priceRange: "$$ - $$$",
+      mapsLink: "https://maps.app.goo.gl/MDfHMshDJAeBHBwX6",
+    },
+    {
+      name: "Best Western Setiabudi",
+      address: "Jl. Dr. Setiabudi No.272, Ledeng, Kec. Cidadap, Kota Bandung, Jawa Barat 40143",
+      distance: "3 km from venue",
+      priceRange: "$$$",
+      mapsLink: "https://maps.app.goo.gl/9gZKboFf6vjCeRGR6",
+    },
+    {
+      name: "Hotel Name 3",
+      address: "789 Inn Avenue, City",
+      distance: "1.5 km from venue",
+      priceRange: "$",
+      mapsLink: "https://maps.google.com/?q=...",
+    },
+    {
+      name: "Hotel Name 4",
+      address: "321 Lodge Lane, City",
+      distance: "4 km from venue",
+      priceRange: "$$ - $$$",
+      mapsLink: "https://maps.google.com/?q=...",
+    },
+  ],
 
   // ---- RSVP SETTINGS ----
   // Note: Plus ones are set per-guest in the CSV import (max_plus_ones column)
