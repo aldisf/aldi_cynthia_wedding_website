@@ -1,0 +1,10 @@
+{
+  "framework": "astro",
+  "buildCommand": "npm run build",
+  "installCommand": "npm install",
+  "functions": {
+    "_render": {
+      "runtime": "nodejs22.x"
+    }
+  }
+}
