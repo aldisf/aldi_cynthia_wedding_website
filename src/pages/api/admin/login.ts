@@ -25,7 +25,7 @@ export const POST: APIRoute = async ({ request, cookies, clientAddress }) => {
     const { password } = body;
 
     // Get admin password from environment variable
-    const adminPassword = import.meta.env.ADMIN_PASSWORD;
+    const adminPassword = process.env.ADMIN_PASSWORD;
 
     if (!adminPassword) {
       return new Response(

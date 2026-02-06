@@ -4,7 +4,7 @@ import type { AstroCookies } from 'astro';
 const SESSION_MAX_AGE = 60 * 60 * 24; // 24 hours in seconds
 
 function getSecret(): string {
-  const secret = import.meta.env.ADMIN_SESSION_SECRET;
+  const secret = process.env.ADMIN_SESSION_SECRET;
   if (!secret) {
     throw new Error('ADMIN_SESSION_SECRET environment variable is not set');
   }
