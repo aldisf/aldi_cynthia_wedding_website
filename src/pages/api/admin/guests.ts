@@ -1,15 +1,8 @@
 import type { APIRoute } from 'astro';
-import type { AstroCookies } from 'astro';
-import { getAllGuests, importGuests, getRSVPStats, generateUniqueGuestCode } from '../../../lib/supabase';
-import { supabase } from '../../../lib/supabase';
+import { isAuthenticated } from '../../../lib/auth';
+import { getAllGuests, importGuests, getRSVPStats, addGuest, deleteGuest } from '../../../lib/db';
 
 export const prerender = false;
-
-// Middleware to check admin authentication
-function isAuthenticated(cookies: AstroCookies): boolean {
-  const authCookie = cookies.get('admin_auth');
-  return authCookie?.value === 'authenticated';
-}
 
 // GET /api/admin/guests - Get all guests
 export const GET: APIRoute = async ({ cookies, url }) => {
@@ -36,8 +29,7 @@ export const GET: APIRoute = async ({ cookies, url }) => {
       JSON.stringify({ guests }),
       { status: 200, headers: { 'Content-Type': 'application/json' } }
     );
-  } catch (error) {
-    console.error('Error fetching guests:', error);
+  } catch {
     return new Response(
       JSON.stringify({ error: 'Failed to fetch guests' }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
@@ -69,38 +61,24 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 
     // Add single guest
     if (action === 'add' && guest) {
-      const uniqueCode = await generateUniqueGuestCode();
-
-      const { data, error } = await supabase.from('guests').insert({
-        unique_code: uniqueCode,
+      const result = await addGuest({
         name: guest.name,
-        email: guest.email || null,
-        phone: guest.phone || null,
+        email: guest.email || undefined,
+        phone: guest.phone || undefined,
         invited_to: guest.invited_to || 'both',
         guest_side: guest.guest_side || 'both',
         max_plus_ones: guest.max_plus_ones || 0,
-        rsvp_status: 'pending',
-        attending_count: 0,
-        attending_events: [],
-      }).select().single();
+      });
 
-      if (error) {
-        console.error('Error adding guest:', error);
+      if (!result.success) {
         return new Response(
-          JSON.stringify({ error: 'Failed to add guest. Please try again.' }),
-          { status: 500, headers: { 'Content-Type': 'application/json' } }
-        );
-      }
-
-      if (!data) {
-        return new Response(
-          JSON.stringify({ error: 'Failed to add guest. Database operation was blocked.' }),
+          JSON.stringify({ error: result.error || 'Failed to add guest. Please try again.' }),
           { status: 500, headers: { 'Content-Type': 'application/json' } }
         );
       }
 
       return new Response(
-        JSON.stringify({ success: true, guest: data }),
+        JSON.stringify({ success: true, guest: result.guest }),
         { status: 201, headers: { 'Content-Type': 'application/json' } }
       );
     }
@@ -109,8 +87,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       JSON.stringify({ error: 'Invalid action' }),
       { status: 400, headers: { 'Content-Type': 'application/json' } }
     );
-  } catch (error) {
-    console.error('Error managing guests:', error);
+  } catch {
     return new Response(
       JSON.stringify({ error: 'Failed to process request' }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
@@ -138,27 +115,12 @@ export const DELETE: APIRoute = async ({ request, cookies }) => {
       );
     }
 
-    // First verify the guest exists
-    const { data: existingGuest } = await supabase
-      .from('guests')
-      .select('id')
-      .eq('id', id)
-      .single();
+    const result = await deleteGuest(id);
 
-    if (!existingGuest) {
+    if (!result.success) {
       return new Response(
-        JSON.stringify({ error: 'Guest not found' }),
-        { status: 404, headers: { 'Content-Type': 'application/json' } }
-      );
-    }
-
-    const { error } = await supabase.from('guests').delete().eq('id', id);
-
-    if (error) {
-      console.error('Error deleting guest:', error);
-      return new Response(
-        JSON.stringify({ error: 'Failed to delete guest. Please try again.' }),
-        { status: 500, headers: { 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: result.error || 'Failed to delete guest.' }),
+        { status: result.error === 'Guest not found' ? 404 : 500, headers: { 'Content-Type': 'application/json' } }
       );
     }
 
@@ -166,8 +128,7 @@ export const DELETE: APIRoute = async ({ request, cookies }) => {
       JSON.stringify({ success: true }),
       { status: 200, headers: { 'Content-Type': 'application/json' } }
     );
-  } catch (error) {
-    console.error('Error deleting guest:', error);
+  } catch {
     return new Response(
       JSON.stringify({ error: 'Failed to delete guest. Please try again.' }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }

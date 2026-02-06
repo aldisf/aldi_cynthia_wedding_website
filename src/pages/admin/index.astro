@@ -3,9 +3,10 @@ import { config } from '../../config';
 
 export const prerender = false;
 
+import { isAuthenticated } from '../../lib/auth';
+
 // Check authentication
-const authCookie = Astro.cookies.get('admin_auth');
-if (authCookie?.value !== 'authenticated') {
+if (!isAuthenticated(Astro.cookies)) {
   return Astro.redirect('/admin/login');
 }
 

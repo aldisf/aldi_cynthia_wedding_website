@@ -1,15 +1,10 @@
 import type { APIRoute } from 'astro';
-import type { AstroCookies } from 'astro';
-import { getAllMessages, toggleMessageVisibility, deleteMessage } from '../../../lib/supabase';
-import { supabase } from '../../../lib/supabase';
+import { isAuthenticated } from '../../../lib/auth';
+import { getAllMessages, toggleMessageVisibility, deleteMessage, addAdminMessage } from '../../../lib/db';
 
 export const prerender = false;
 
-// Middleware to check admin authentication
-function isAuthenticated(cookies: AstroCookies): boolean {
-  const authCookie = cookies.get('admin_auth');
-  return authCookie?.value === 'authenticated';
-}
+const MAX_MESSAGE_LENGTH = 1000;
 
 // GET /api/admin/messages - Get all messages
 export const GET: APIRoute = async ({ cookies }) => {
@@ -26,8 +21,7 @@ export const GET: APIRoute = async ({ cookies }) => {
       JSON.stringify({ messages }),
       { status: 200, headers: { 'Content-Type': 'application/json' } }
     );
-  } catch (error) {
-    console.error('Error fetching messages:', error);
+  } catch {
     return new Response(
       JSON.stringify({ error: 'Failed to fetch messages' }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
@@ -55,26 +49,27 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       );
     }
 
-    const { data, error } = await supabase.from('messages').insert({
-      guest_name,
-      content,
-      is_visible: true,
-    }).select().single();
-
-    if (error) {
-      console.error('Error creating message:', error);
+    if (content.length > MAX_MESSAGE_LENGTH) {
       return new Response(
-        JSON.stringify({ error: 'Failed to create message. Please try again.' }),
+        JSON.stringify({ error: `Message must be ${MAX_MESSAGE_LENGTH} characters or less` }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const result = await addAdminMessage(guest_name.trim(), content.trim());
+
+    if (!result.success) {
+      return new Response(
+        JSON.stringify({ error: result.error || 'Failed to create message. Please try again.' }),
         { status: 500, headers: { 'Content-Type': 'application/json' } }
       );
     }
 
     return new Response(
-      JSON.stringify({ success: true, message: data }),
+      JSON.stringify({ success: true, message: result.message }),
       { status: 201, headers: { 'Content-Type': 'application/json' } }
     );
-  } catch (error) {
-    console.error('Error creating message:', error);
+  } catch {
     return new Response(
       JSON.stringify({ error: 'Failed to create message' }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
@@ -105,7 +100,6 @@ export const PATCH: APIRoute = async ({ request, cookies }) => {
     const result = await toggleMessageVisibility(id, is_visible);
 
     if (!result.success) {
-      console.error('Error updating message visibility:', result.error);
       return new Response(
         JSON.stringify({ error: 'Failed to update message. Please try again.' }),
         { status: 500, headers: { 'Content-Type': 'application/json' } }
@@ -116,8 +110,7 @@ export const PATCH: APIRoute = async ({ request, cookies }) => {
       JSON.stringify({ success: true }),
       { status: 200, headers: { 'Content-Type': 'application/json' } }
     );
-  } catch (error) {
-    console.error('Error updating message:', error);
+  } catch {
     return new Response(
       JSON.stringify({ error: 'Failed to update message' }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
@@ -148,7 +141,6 @@ export const DELETE: APIRoute = async ({ request, cookies }) => {
     const result = await deleteMessage(id);
 
     if (!result.success) {
-      console.error('Error deleting message:', result.error);
       return new Response(
         JSON.stringify({ error: 'Failed to delete message. Please try again.' }),
         { status: 500, headers: { 'Content-Type': 'application/json' } }
@@ -159,8 +151,7 @@ export const DELETE: APIRoute = async ({ request, cookies }) => {
       JSON.stringify({ success: true }),
       { status: 200, headers: { 'Content-Type': 'application/json' } }
     );
-  } catch (error) {
-    console.error('Error deleting message:', error);
+  } catch {
     return new Response(
       JSON.stringify({ error: 'Failed to delete message' }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }

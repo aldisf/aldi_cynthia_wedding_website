@@ -13,7 +13,7 @@ This document provides comprehensive technical details for developers working on
 5. [Database Schema](#database-schema)
 6. [Frontend Components](#frontend-components)
 7. [API Routes](#api-routes)
-8. [Authentication](#authentication)
+8. [Authentication & Security](#authentication--security)
 9. [RSVP System](#rsvp-system)
 10. [Admin Dashboard](#admin-dashboard)
 11. [Styling System](#styling-system)
@@ -35,18 +35,19 @@ This document provides comprehensive technical details for developers working on
              │                       │                   │
              ▼                       ▼                   ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                      ASTRO SERVER (Node.js)                      │
+│                      ASTRO SERVER (Vercel)                        │
 │  - Server-side rendering (output: 'server')                      │
 │  - API routes at /api/*                                          │
-│  - Cookie-based admin auth                                       │
+│  - HMAC-signed cookie auth for admin                             │
+│  - All DB access is server-side only                             │
 └────────────────────────────────┬────────────────────────────────┘
                                  │
                                  ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                         SUPABASE                                 │
-│  - PostgreSQL database                                           │
-│  - Row Level Security (RLS)                                      │
-│  - Real-time subscriptions (optional)                            │
+│                          TURSO (libSQL)                           │
+│  - SQLite database over HTTP                                     │
+│  - Auto-migrating schema (version-tracked)                       │
+│  - No client-side credentials exposed                            │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -54,7 +55,7 @@ This document provides comprehensive technical details for developers working on
 
 1. **Public Visitor** → `/ (index.astro)` → Static wedding info, no RSVP capability
 2. **Invited Guest** → `/rsvp/[code]` → Personalized page with RSVP form + message posting
-3. **Admin** → `/admin/login` → Cookie auth → `/admin` dashboard
+3. **Admin** → `/admin/login` → HMAC-signed cookie auth → `/admin` dashboard
 
 ---
 
@@ -64,16 +65,16 @@ This document provides comprehensive technical details for developers working on
 |-------|------------|---------|---------|
 | Framework | Astro | 5.x | SSR + Static site generation |
 | Styling | Tailwind CSS | 4.x | Utility-first CSS |
-| Database | Supabase | - | PostgreSQL + Auth + API |
-| Runtime | Node.js | 18+ | Server adapter |
+| Database | Turso (libSQL) | - | SQLite database over HTTP |
+| Deployment | Vercel | - | Serverless hosting |
 | Language | TypeScript | 5.x | Type safety |
 
 ### Key Dependencies
 
 ```json
 {
-  "@astrojs/node": "Server adapter for Node.js deployment",
-  "@supabase/supabase-js": "Supabase client library",
+  "@astrojs/vercel": "Vercel deployment adapter",
+  "@libsql/client": "Turso/libSQL database client",
   "@tailwindcss/vite": "Tailwind CSS integration",
   "tailwindcss": "CSS framework",
   "tslib": "TypeScript runtime helpers"
@@ -109,7 +110,8 @@ wedding_website_v2/
 │   │   └── Layout.astro               # Main HTML layout with nav
 │   │
 │   ├── lib/
-│   │   └── supabase.ts                # Database client + helpers
+│   │   ├── db.ts                      # Turso client, schema, query functions
+│   │   └── auth.ts                    # Session tokens, rate limiting
 │   │
 │   ├── pages/
 │   │   ├── index.astro                # Public wedding page
@@ -125,16 +127,13 @@ wedding_website_v2/
 │   │           ├── login.ts           # Admin authentication
 │   │           ├── logout.ts          # Admin logout
 │   │           ├── guests.ts          # Guest management API
-│   │           └── messages.ts        # Message moderation API
+│   │           ├── messages.ts        # Message moderation API
+│   │           └── sql.ts             # Ad-hoc SQL endpoint
 │   │
 │   ├── styles/
 │   │   └── global.css                 # Global styles + CSS variables
 │   │
 │   └── config.ts                      # Wedding configuration
-│
-├── supabase/
-│   └── migrations/
-│       └── 001_initial_schema.sql     # Database schema
 │
 ├── .env.example                       # Environment template
 ├── astro.config.mjs                   # Astro configuration
@@ -229,15 +228,36 @@ export const colorPalettes = {
 
 ```bash
 # .env
-PUBLIC_SUPABASE_URL=https://xxx.supabase.co
-PUBLIC_SUPABASE_ANON_KEY=eyJ...
+TURSO_DATABASE_URL=libsql://your-db.turso.io
+TURSO_AUTH_TOKEN=your-auth-token
 ADMIN_PASSWORD=your-secure-password
+ADMIN_SESSION_SECRET=your-random-secret
 PUBLIC_SITE_URL=https://your-domain.com
 ```
+
+| Variable | Description | Required | Client-exposed |
+|----------|-------------|----------|----------------|
+| `TURSO_DATABASE_URL` | Turso database URL | Yes | No |
+| `TURSO_AUTH_TOKEN` | Turso auth token | Yes | No |
+| `ADMIN_PASSWORD` | Admin login password | Yes | No |
+| `ADMIN_SESSION_SECRET` | HMAC signing key for sessions | Yes | No |
+| `PUBLIC_SITE_URL` | Full site URL for guest links | Yes | Yes (prefix) |
 
 ---
 
 ## Database Schema
+
+The database uses **Turso (SQLite)** with auto-migrating schema. Tables are created automatically on first request via `ensureSchema()` in `src/lib/db.ts`.
+
+### Schema Version Tracking
+
+```sql
+CREATE TABLE schema_version (
+  version INTEGER PRIMARY KEY
+);
+```
+
+Migrations are defined in `src/lib/db.ts` as a `MIGRATIONS` record keyed by version number. The system checks the current version on startup and runs any pending migrations.
 
 ### Tables
 
@@ -247,29 +267,29 @@ Primary table for invited guests and their RSVP status.
 
 ```sql
 CREATE TABLE guests (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  unique_code VARCHAR(20) UNIQUE NOT NULL,  -- For personalized URLs
-  name VARCHAR(255) NOT NULL,
-  email VARCHAR(255),
-  phone VARCHAR(50),
-  rsvp_status VARCHAR(20) DEFAULT 'pending', -- pending | yes | no
-  max_plus_ones INTEGER DEFAULT 0,           -- Allocated by couple
-  attending_count INTEGER DEFAULT 0,         -- Actual attending (0 = not coming)
+  id TEXT PRIMARY KEY,                -- UUID (generated server-side)
+  unique_code TEXT UNIQUE NOT NULL,   -- 8-char code for /rsvp/[code] URLs
+  name TEXT NOT NULL,
+  email TEXT,
+  phone TEXT,
+  rsvp_status TEXT DEFAULT 'pending', -- pending | yes | no
+  max_plus_ones INTEGER DEFAULT 0,    -- Allocated by couple (from CSV)
+  attending_count INTEGER DEFAULT 0,  -- Actual attending count
   dietary_notes TEXT,
-  song_request VARCHAR(255),
-  invited_to VARCHAR(20) DEFAULT 'both',     -- ceremony | reception | both
-  guest_side VARCHAR(20) DEFAULT 'both',     -- groom | bride | both (for splitting invitation duties)
-  attending_events TEXT[] DEFAULT '{}',      -- Which events they'll attend
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  song_request TEXT,
+  invited_to TEXT DEFAULT 'both',     -- ceremony | reception | both
+  guest_side TEXT DEFAULT 'both',     -- groom | bride | both
+  attending_events TEXT DEFAULT '[]', -- JSON array of event IDs
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
 );
 ```
 
 **Key fields:**
-- `unique_code`: 8-character alphanumeric code for `/rsvp/[code]` URLs
+- `unique_code`: 8-character cryptographically-generated code for `/rsvp/[code]` URLs
 - `max_plus_ones`: Number of additional guests allocated (set via CSV import)
 - `attending_count`: Total people attending (1 = just guest, 2+ = with plus ones)
-- `rsvp_status`: Derived from attending_count (yes if > 0, no if submitted as 0)
+- `attending_events`: Stored as JSON string (SQLite has no native array type), parsed via `parseJsonArray()`
 - `guest_side`: Which side of the couple the guest belongs to (for splitting invitation duties)
 
 #### `messages`
@@ -278,12 +298,12 @@ Guest wishes/messages displayed on the website.
 
 ```sql
 CREATE TABLE messages (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  guest_id UUID REFERENCES guests(id) ON DELETE SET NULL,
-  guest_name VARCHAR(255) NOT NULL,
+  id TEXT PRIMARY KEY,
+  guest_id TEXT REFERENCES guests(id) ON DELETE SET NULL,
+  guest_name TEXT NOT NULL,
   content TEXT NOT NULL,
-  is_visible BOOLEAN DEFAULT true,  -- Admin can hide messages
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  is_visible INTEGER DEFAULT 1,  -- SQLite boolean (0/1)
+  created_at TEXT DEFAULT (datetime('now'))
 );
 ```
 
@@ -293,25 +313,38 @@ For custom gift registry management.
 
 ```sql
 CREATE TABLE registry_items (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  name VARCHAR(255) NOT NULL,
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
   description TEXT,
-  image_url VARCHAR(500),
-  link VARCHAR(500),
-  target_amount DECIMAL(10, 2),
-  current_amount DECIMAL(10, 2) DEFAULT 0,
-  is_claimed BOOLEAN DEFAULT false,
-  claimed_by_guest_id UUID REFERENCES guests(id),
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  image_url TEXT,
+  link TEXT,
+  target_amount REAL,
+  current_amount REAL DEFAULT 0,
+  is_claimed INTEGER DEFAULT 0,
+  claimed_by_guest_id TEXT REFERENCES guests(id) ON DELETE SET NULL,
+  created_at TEXT DEFAULT (datetime('now'))
 );
 ```
 
-### Row Level Security
+### SQLite vs PostgreSQL Notes
 
-All tables have RLS enabled. Current policies allow:
-- Public read access to guests (for RSVP lookup)
-- Public read access to visible messages
-- Insert/update access for RSVP submissions
+| PostgreSQL (old) | SQLite (current) |
+|---|---|
+| `UUID` type | `TEXT` with `crypto.randomUUID()` |
+| `TIMESTAMP WITH TIME ZONE` | `TEXT` (ISO 8601 via `datetime('now')`) |
+| `TEXT[]` (arrays) | `TEXT` (JSON strings, e.g. `'["ceremony"]'`) |
+| `DECIMAL(10,2)` | `REAL` |
+| `BOOLEAN` | `INTEGER` (0/1) |
+| RLS policies | Not needed — all access is server-side |
+
+### Modifying the Schema
+
+To evolve the schema:
+
+1. Increment `SCHEMA_VERSION` in `src/lib/db.ts`
+2. Add a new entry in the `MIGRATIONS` record with the new version number
+3. Write `ALTER TABLE` or `CREATE TABLE` statements as needed
+4. Deploy — migrations run automatically on first request
 
 ---
 
@@ -424,14 +457,14 @@ Fetch visible messages with pagination.
 
 #### `POST /api/messages`
 
-Submit a new message (requires valid guest code).
+Submit a new message (requires valid guest code). Max 1000 characters.
 
 ```typescript
 // Request body
 {
   guestCode: string,  // Required - validates guest exists
   name: string,
-  message: string
+  message: string     // Max 1000 chars
 }
 
 // Response
@@ -453,7 +486,7 @@ Fetch guest info by unique code.
 
 #### `POST /api/rsvp`
 
-Submit RSVP response.
+Submit RSVP response. Input validation enforced.
 
 ```typescript
 // Request body
@@ -462,28 +495,32 @@ Submit RSVP response.
   attending: 'yes' | 'no',
   attendingCount: number,     // Total people (validated against maxPlusOnes)
   events: string[],           // ['ceremony', 'reception']
-  dietary: string,
-  songRequest: string,
+  dietary: string,            // Max 500 chars
+  songRequest: string,        // Max 200 chars
   email: string
 }
 
 // Validation
 - attendingCount cannot exceed 1 + max_plus_ones
 - If attending='no', attendingCount is set to 0
+- dietary max 500 chars, songRequest max 200 chars
 ```
 
 ### Admin APIs
 
-All admin APIs check for `admin_auth` cookie set to `'authenticated'`.
+All admin APIs verify the HMAC-signed session cookie via `isAuthenticated()` from `src/lib/auth.ts`.
 
 #### `POST /api/admin/login`
+
+Rate-limited: 5 attempts per IP per 15 minutes.
 
 ```typescript
 // Request
 { password: string }
 
-// Success: Sets HttpOnly cookie, returns { success: true }
-// Failure: Returns { error: 'Invalid password' }
+// Success: Sets HttpOnly HMAC-signed cookie, returns { success: true }
+// Failure: Returns { error: 'Invalid password' } (401)
+// Rate limited: Returns { error: 'Too many login attempts...' } (429)
 ```
 
 #### `POST /api/admin/logout`
@@ -506,20 +543,20 @@ Clears authentication cookie.
 // Import from CSV
 {
   action: 'import',
-  guests: [{ name, email, phone, invited_to, max_plus_ones }]
+  guests: [{ name, email, phone, guest_side, invited_to, max_plus_ones }]
 }
 
 // Add single guest
 {
   action: 'add',
-  guest: { name, email, phone, invited_to, max_plus_ones }
+  guest: { name, email, phone, guest_side, invited_to, max_plus_ones }
 }
 ```
 
 #### `DELETE /api/admin/guests`
 
 ```typescript
-{ id: string }  // Guest UUID to delete
+{ id: string }  // Guest ID to delete
 ```
 
 #### `GET /api/admin/messages`
@@ -528,7 +565,7 @@ Returns all messages (including hidden).
 
 #### `POST /api/admin/messages`
 
-Admin can add messages on behalf of guests.
+Admin can add messages on behalf of guests. Max 1000 characters.
 
 ```typescript
 { guest_name: string, content: string }
@@ -548,20 +585,58 @@ Toggle message visibility.
 { id: string }
 ```
 
+#### `POST /api/admin/sql`
+
+Execute arbitrary SQL queries (admin only). Useful for ad-hoc data inspection and schema alterations.
+
+```typescript
+// Request
+{
+  sql: string,
+  args?: (string | number | null)[]  // Parameterized query args
+}
+
+// Response
+{
+  columns: string[],
+  rows: Record<string, unknown>[],
+  rowsAffected: number
+}
+```
+
+**Example usage:**
+```bash
+curl -X POST /api/admin/sql \
+  -H "Content-Type: application/json" \
+  -d '{"sql": "SELECT COUNT(*) as count FROM guests WHERE rsvp_status = ?", "args": ["yes"]}'
+```
+
 ---
 
-## Authentication
+## Authentication & Security
 
 ### Admin Authentication Flow
 
 1. User visits `/admin/login`
-2. Enters password (compared against `ADMIN_PASSWORD` env var)
-3. On success: `admin_auth` cookie set with value `'authenticated'`
-4. Cookie settings:
+2. Enters password (timing-safe comparison against `ADMIN_PASSWORD` env var)
+3. Rate limiting checked (5 attempts per IP per 15 min window)
+4. On success: HMAC-signed session token created:
+   ```
+   token = timestamp + '.' + HMAC-SHA256(timestamp, ADMIN_SESSION_SECRET)
+   ```
+5. Token set as `admin_auth` cookie:
    - `httpOnly: true` (not accessible via JS)
    - `secure: true` (HTTPS only in production)
    - `sameSite: 'strict'`
    - `maxAge: 86400` (24 hours)
+
+### Session Verification
+
+On every admin request, `isAuthenticated()` from `src/lib/auth.ts`:
+1. Reads the `admin_auth` cookie
+2. Splits into `timestamp.signature`
+3. Recomputes HMAC with the secret and compares (timing-safe)
+4. Checks the timestamp hasn't expired (24-hour window)
 
 ### Protected Routes
 
@@ -569,19 +644,43 @@ Admin pages check authentication in frontmatter:
 
 ```astro
 ---
-const authCookie = Astro.cookies.get('admin_auth');
-if (authCookie?.value !== 'authenticated') {
+import { isAuthenticated } from '../../lib/auth';
+
+if (!isAuthenticated(Astro.cookies)) {
   return Astro.redirect('/admin/login');
 }
 ---
 ```
 
+Admin API routes check at the top of each handler:
+
+```typescript
+import { isAuthenticated } from '../../../lib/auth';
+
+if (!isAuthenticated(cookies)) {
+  return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
+}
+```
+
 ### Guest "Authentication"
 
 Guests don't have traditional auth. Instead:
-- Each guest has a `unique_code` (8 chars, alphanumeric)
+- Each guest has a `unique_code` (8 chars, cryptographically generated)
 - URL `/rsvp/abc12345` loads that guest's personalized page
 - Code is validated on every API call (messages, RSVP)
+- Codes are generated with `crypto.getRandomValues()` (not `Math.random()`)
+
+### Security Measures Summary
+
+| Measure | Implementation | File |
+|---------|---------------|------|
+| HMAC-signed sessions | `timestamp.signature` tokens | `src/lib/auth.ts` |
+| Timing-safe password check | `crypto.timingSafeEqual()` | `src/lib/auth.ts` |
+| Rate limiting (admin login) | In-memory, 5 per IP per 15 min | `src/lib/auth.ts` |
+| Cryptographic guest codes | `crypto.getRandomValues()` | `src/lib/db.ts` |
+| Input validation | Max lengths on messages/dietary/songs | API routes |
+| Server-only DB credentials | No `PUBLIC_` prefix on Turso vars | `.env` |
+| No client-side DB access | All queries go through API routes | Architecture |
 
 ---
 
@@ -598,9 +697,6 @@ Guests don't have traditional auth. Instead:
 
 ### Plus Ones Logic
 
-**Old System (removed):** Global setting for max plus ones.
-
-**New System:**
 - `max_plus_ones` is set per-guest in CSV import
 - Guest sees different UI based on their allocation:
 
@@ -628,7 +724,9 @@ Guest submits RSVP
         ▼
 POST /api/rsvp
         │
-        ├─► Validate guest exists
+        ├─► Validate guest exists (by code)
+        │
+        ├─► Validate input lengths (dietary ≤500, song ≤200)
         │
         ├─► Validate attendingCount <= 1 + max_plus_ones
         │
@@ -636,6 +734,7 @@ POST /api/rsvp
         │   - rsvp_status = 'yes' | 'no'
         │   - attending_count = N
         │   - dietary_notes, song_request, etc.
+        │   - updated_at = now
         │
         └─► Return success/error
 ```
@@ -652,14 +751,14 @@ POST /api/rsvp
 │                    │                                 │
 │  Wedding Admin     │  [Dashboard | Guests | ...]    │
 │  ─────────────     │                                 │
-│  📊 Dashboard      │  Stats cards / Tables / Forms   │
-│  👥 Guests         │                                 │
-│  📱 Send Invites   │                                 │
-│  💬 Messages       │                                 │
-│  📤 Import CSV     │                                 │
+│  Dashboard         │  Stats cards / Tables / Forms   │
+│  Guests            │                                 │
+│  Send Invites      │                                 │
+│  Messages          │                                 │
+│  Import CSV        │                                 │
 │                    │                                 │
-│  🔗 View Website   │                                 │
-│  🚪 Logout         │                                 │
+│  View Website      │                                 │
+│  Logout            │                                 │
 └──────────────────────────────────────────────────────┘
 ```
 
@@ -783,33 +882,27 @@ Using Tailwind's default breakpoints:
 npm run build
 ```
 
-Output: `dist/` directory with Node.js server
-
-### Start Command
-
-```bash
-node dist/server/entry.mjs
-```
+Output: `.vercel/output/` directory (via Vercel adapter)
 
 ### Environment Variables (Production)
 
 ```bash
-PUBLIC_SUPABASE_URL=https://xxx.supabase.co
-PUBLIC_SUPABASE_ANON_KEY=eyJ...
+TURSO_DATABASE_URL=libsql://your-db.turso.io
+TURSO_AUTH_TOKEN=your-auth-token
 ADMIN_PASSWORD=secure-random-password
+ADMIN_SESSION_SECRET=your-random-secret
 PUBLIC_SITE_URL=https://your-domain.com
-HOST=0.0.0.0
-PORT=4321
 ```
 
 ### Platform-Specific
 
-#### Vercel
+#### Vercel (Primary)
 ```json
-// vercel.json (if needed)
+// vercel.json
 {
+  "framework": "astro",
   "buildCommand": "npm run build",
-  "outputDirectory": "dist"
+  "installCommand": "npm install"
 }
 ```
 
@@ -852,14 +945,29 @@ CMD ["node", "dist/server/entry.mjs"]
 1. Create file in `src/pages/api/`
 2. Export `GET`, `POST`, `PATCH`, `DELETE` as needed
 3. Add `export const prerender = false;`
-4. Use `Astro.cookies` for auth if admin route
+4. Import `isAuthenticated` from `../../lib/auth` if admin route
 
 ### Modifying Database Schema
 
-1. Update `supabase/migrations/001_initial_schema.sql`
-2. Update `src/lib/supabase.ts` types
-3. Run migration in Supabase SQL Editor
+1. Increment `SCHEMA_VERSION` in `src/lib/db.ts`
+2. Add new migration statements in the `MIGRATIONS` record
+3. Update TypeScript types in `src/lib/db.ts`
 4. Update affected components and APIs
+5. Deploy — migrations run automatically on first request
+
+### Running Ad-hoc SQL
+
+Use the admin SQL endpoint:
+
+```bash
+# Via curl (must have valid admin cookie)
+curl -X POST https://your-site.com/api/admin/sql \
+  -H "Content-Type: application/json" \
+  -H "Cookie: admin_auth=your-session-token" \
+  -d '{"sql": "SELECT * FROM guests WHERE rsvp_status = ?", "args": ["yes"]}'
+```
+
+Or build a simple UI in the admin dashboard to call `POST /api/admin/sql`.
 
 ---
 
@@ -872,18 +980,25 @@ npm install tslib
 
 ### RSVP not submitting
 - Check browser console for errors
-- Verify Supabase URL and key in `.env`
-- Check RLS policies allow updates
+- Verify `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` in `.env`
+- Check that the Turso database is accessible (try `turso db shell your-db`)
 
 ### Admin login not working
 - Verify `ADMIN_PASSWORD` in `.env`
+- Verify `ADMIN_SESSION_SECRET` is set (required for signing cookies)
 - Check cookie is being set (DevTools → Application → Cookies)
-- Ensure not using HTTP on production (secure cookie)
+- Ensure not using HTTP on production (secure cookie requires HTTPS)
+- If rate-limited, wait 15 minutes or restart the server (resets in-memory counters)
 
 ### Images not loading
 - Verify files exist in `public/images/`
 - Check file paths in `config.ts` match actual files
 - Images use `onerror` handlers to hide on 404
+
+### Database tables not created
+- Tables auto-create on first request — visit any page to trigger
+- Check Turso credentials are correct
+- Check server logs for migration errors
 
 ---
 
@@ -891,31 +1006,17 @@ npm install tslib
 
 Low priority items for future improvement:
 
-### 1. Admin Session Cookie Missing Explicit Path
+### 1. No CSRF Protection
 
-**Files:** `src/pages/api/admin/login.ts`
+Form submissions don't include CSRF tokens. The cookie-based authentication with `httpOnly` and `sameSite: 'strict'` provides protection against most CSRF attacks, but a token would add defense in depth.
 
-The admin authentication cookie should include an explicit `path: '/'` option to ensure it's sent with all requests. Currently relies on browser defaults.
+### 2. Rate Limiting Resets on Cold Start
 
-### 2. No CSRF Protection
+The admin login rate limiter uses in-memory storage, which resets when the Vercel serverless function cold starts. For stronger protection, consider using a persistent store (e.g., Turso itself or an edge KV store).
 
-Form submissions don't include CSRF tokens. While the cookie-based authentication with `httpOnly` and `sameSite: 'strict'` provides some protection, a CSRF token would add another layer of security for sensitive operations like deleting guests.
+### 3. No Content-Security-Policy Headers
 
-### 3. No Rate Limiting on Public API Endpoints
-
-**Files:** `src/pages/api/messages.ts`, `src/pages/api/rsvp.ts`
-
-Public endpoints like `POST /api/messages` and `POST /api/rsvp` don't have rate limiting implemented. For production use, consider:
-- Adding rate limiting middleware
-- Implementing CAPTCHA for message submissions
-- Using Supabase Edge Functions with built-in rate limiting
-
-### 4. Service Role Key Not Used for Admin Operations
-
-Admin operations currently use the anon key with permissive RLS policies. For better security, consider:
-- Using a Supabase service role key (with `service_role` secret) for admin API routes
-- Implementing more restrictive RLS policies for the anon key
-- This would require a server-side environment variable (not `PUBLIC_`)
+CSP headers are not currently set. Consider adding them for additional XSS protection.
 
 ---
 
@@ -924,17 +1025,17 @@ Admin operations currently use the anon key with permissive RLS policies. For be
 Potential enhancements for future development:
 
 1. **Email Notifications**: Send confirmation emails on RSVP
-2. **Real-time Updates**: Use Supabase real-time for live message board
-3. **Photo Upload**: Allow guests to upload photos
-4. **QR Codes**: Generate QR codes for invitation links
-5. **Multi-language**: i18n support for bilingual weddings
-6. **Analytics**: Track page views, RSVP conversion rates
-7. **Export**: CSV export of guest list and RSVPs
-8. **Reminders**: Automated RSVP reminder emails
-9. ~~**WhatsApp Integration**: Send invitations via WhatsApp~~ ✅ Implemented
-10. ~~**Guest Side Tracking**: Track groom/bride side for delegation~~ ✅ Implemented
+2. **Photo Upload**: Allow guests to upload photos
+3. **QR Codes**: Generate QR codes for invitation links
+4. **Multi-language**: i18n support for bilingual weddings
+5. **Analytics**: Track page views, RSVP conversion rates
+6. **Export**: CSV export of guest list and RSVPs
+7. **Reminders**: Automated RSVP reminder emails
+8. ~~**WhatsApp Integration**: Send invitations via WhatsApp~~ ✅ Implemented
+9. ~~**Guest Side Tracking**: Track groom/bride side for delegation~~ ✅ Implemented
+10. ~~**Security Hardening**: Signed sessions, rate limiting, input validation~~ ✅ Implemented
+11. ~~**Database Migration**: Move from Supabase to Turso~~ ✅ Implemented
 
 ---
 
-*Last updated: January 2026*
-
+*Last updated: February 2026*

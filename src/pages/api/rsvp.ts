@@ -1,7 +1,10 @@
 import type { APIRoute } from 'astro';
-import { getGuestByCode, updateGuestRSVP } from '../../lib/supabase';
+import { getGuestByCode, updateGuestRSVP } from '../../lib/db';
 
 export const prerender = false;
+
+const MAX_DIETARY_NOTES = 500;
+const MAX_SONG_REQUEST = 200;
 
 // GET /api/rsvp?code=xxx - Get guest info by code
 export const GET: APIRoute = async ({ url }) => {
@@ -39,8 +42,7 @@ export const GET: APIRoute = async ({ url }) => {
       }),
       { status: 200, headers: { 'Content-Type': 'application/json' } }
     );
-  } catch (error) {
-    console.error('Error fetching guest:', error);
+  } catch {
     return new Response(
       JSON.stringify({ error: 'Failed to fetch guest information' }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
@@ -66,6 +68,21 @@ export const POST: APIRoute = async ({ request }) => {
     if (!guestCode || !attending) {
       return new Response(
         JSON.stringify({ error: 'Guest code and attendance status are required' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Input length validation
+    if (dietary && dietary.length > MAX_DIETARY_NOTES) {
+      return new Response(
+        JSON.stringify({ error: `Dietary notes must be ${MAX_DIETARY_NOTES} characters or less` }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (songRequest && songRequest.length > MAX_SONG_REQUEST) {
+      return new Response(
+        JSON.stringify({ error: `Song request must be ${MAX_SONG_REQUEST} characters or less` }),
         { status: 400, headers: { 'Content-Type': 'application/json' } }
       );
     }
@@ -134,8 +151,7 @@ export const POST: APIRoute = async ({ request }) => {
       }),
       { status: 200, headers: { 'Content-Type': 'application/json' } }
     );
-  } catch (error) {
-    console.error('Error submitting RSVP:', error);
+  } catch {
     return new Response(
       JSON.stringify({ error: 'Failed to submit RSVP' }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }

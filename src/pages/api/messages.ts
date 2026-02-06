@@ -1,7 +1,9 @@
 import type { APIRoute } from 'astro';
-import { getVisibleMessages, createMessage, getGuestByCode } from '../../lib/supabase';
+import { getVisibleMessages, createMessage, getGuestByCode } from '../../lib/db';
 
 export const prerender = false;
+
+const MAX_MESSAGE_LENGTH = 1000;
 
 // GET /api/messages - Get visible messages
 export const GET: APIRoute = async ({ url }) => {
@@ -15,8 +17,7 @@ export const GET: APIRoute = async ({ url }) => {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     });
-  } catch (error) {
-    console.error('Error fetching messages:', error);
+  } catch {
     return new Response(
       JSON.stringify({ error: 'Failed to fetch messages' }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
@@ -34,6 +35,14 @@ export const POST: APIRoute = async ({ request }) => {
     if (!guestCode || !message) {
       return new Response(
         JSON.stringify({ error: 'Guest code and message are required' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Input length validation
+    if (message.length > MAX_MESSAGE_LENGTH) {
+      return new Response(
+        JSON.stringify({ error: `Message must be ${MAX_MESSAGE_LENGTH} characters or less` }),
         { status: 400, headers: { 'Content-Type': 'application/json' } }
       );
     }
@@ -61,8 +70,7 @@ export const POST: APIRoute = async ({ request }) => {
       JSON.stringify({ success: true }),
       { status: 201, headers: { 'Content-Type': 'application/json' } }
     );
-  } catch (error) {
-    console.error('Error creating message:', error);
+  } catch {
     return new Response(
       JSON.stringify({ error: 'Failed to send message' }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }

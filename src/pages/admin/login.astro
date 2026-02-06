@@ -1,11 +1,11 @@
 ---
 import { config } from '../../config';
+import { isAuthenticated } from '../../lib/auth';
 
 export const prerender = false;
 
 // Check if already logged in via cookie
-const authCookie = Astro.cookies.get('admin_auth');
-if (authCookie?.value === 'authenticated') {
+if (isAuthenticated(Astro.cookies)) {
   return Astro.redirect('/admin');
 }
 

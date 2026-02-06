@@ -19,8 +19,8 @@ A modern, elegant wedding website with RSVP management, guest messaging, and adm
 
 - **Astro** - Static site generator with server-side rendering
 - **Tailwind CSS** - Utility-first CSS framework
-- **Supabase** - PostgreSQL database & authentication
-- **Node.js** - Server adapter for API routes
+- **Turso** - SQLite database (libSQL) — fast, always-on, serverless
+- **Vercel** - Deployment platform
 
 ## Quick Start
 
@@ -30,12 +30,16 @@ A modern, elegant wedding website with RSVP management, guest messaging, and adm
 npm install
 ```
 
-### 2. Set Up Supabase
+### 2. Set Up Turso Database
 
-1. Create a free account at [supabase.com](https://supabase.com)
-2. Create a new project
-3. Go to **SQL Editor** and run the migration in `supabase/migrations/001_initial_schema.sql`
-4. Go to **Project Settings > API** to get your URL and anon key
+1. Create a free account at [turso.tech](https://turso.tech)
+2. Install the Turso CLI and create a database:
+   ```bash
+   turso db create wedding
+   turso db show wedding --url    # Copy the URL
+   turso db tokens create wedding  # Copy the token
+   ```
+3. No manual schema setup needed — tables are auto-created on first request
 
 ### 3. Configure Environment Variables
 
@@ -48,10 +52,17 @@ cp .env.example .env
 Edit `.env` with your values:
 
 ```env
-PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+TURSO_DATABASE_URL=libsql://your-db.turso.io
+TURSO_AUTH_TOKEN=your-auth-token
 ADMIN_PASSWORD=your-secure-admin-password
+ADMIN_SESSION_SECRET=your-random-secret-here
 PUBLIC_SITE_URL=https://your-domain.com
+```
+
+Generate a session secret:
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
 ### 4. Customize Your Wedding Details
@@ -101,23 +112,15 @@ npm run build
 npm run preview
 ```
 
-Or run the production server directly:
-
-```bash
-npm run build
-node dist/server/entry.mjs
-```
-
 #### Environment Variables for Local Development
 
 | Variable | Description | Required |
 |----------|-------------|----------|
-| `PUBLIC_SUPABASE_URL` | Your Supabase project URL | Yes |
-| `PUBLIC_SUPABASE_ANON_KEY` | Supabase anon/public key | Yes |
+| `TURSO_DATABASE_URL` | Your Turso database URL | Yes |
+| `TURSO_AUTH_TOKEN` | Turso authentication token | Yes |
 | `ADMIN_PASSWORD` | Password for admin dashboard | Yes |
+| `ADMIN_SESSION_SECRET` | Secret key for signing session cookies | Yes |
 | `PUBLIC_SITE_URL` | Full URL of your site (for generating guest links) | Yes |
-| `HOST` | Server host (default: `localhost`) | No |
-| `PORT` | Server port (default: `4321`) | No |
 
 ## Admin Dashboard
 
@@ -130,6 +133,7 @@ Access the admin panel at `/admin/login` with your `ADMIN_PASSWORD`.
 - **Send Invites** - Send WhatsApp invitations with customizable message templates
 - **Messages** - Moderate guest messages (show/hide/delete)
 - **Import CSV** - Bulk import guests from CSV file
+- **SQL Console** - Run ad-hoc SQL queries via `POST /api/admin/sql`
 
 ### CSV Format for Guest Import
 
@@ -166,11 +170,20 @@ You are cordially invited to our wedding! Please RSVP here:
 We hope to see you there! 💕
 ```
 
+## Security
+
+- **Server-side only database access** — Turso credentials are never exposed to the client
+- **HMAC-signed session cookies** — Admin sessions use cryptographically signed tokens (not static strings)
+- **Timing-safe password comparison** — Prevents timing attacks on admin login
+- **Cryptographic guest codes** — Generated with `crypto.getRandomValues()` (not `Math.random()`)
+- **Rate limiting** — Admin login is rate-limited to 5 attempts per IP per 15 minutes
+- **Input validation** — Messages (1000 chars), dietary notes (500 chars), song requests (200 chars)
+
 ## Deployment
 
 ### Prerequisites
 
-1. Ensure your Supabase database is set up with the migration schema
+1. Have a Turso database created with URL and auth token
 2. Have all environment variables ready
 3. Build the project: `npm run build`
 
@@ -183,9 +196,10 @@ Vercel works out of the box with Astro.
 1. Push your code to GitHub
 2. Import project to [Vercel](https://vercel.com)
 3. Add environment variables in **Settings > Environment Variables**:
-   - `PUBLIC_SUPABASE_URL`
-   - `PUBLIC_SUPABASE_ANON_KEY`
+   - `TURSO_DATABASE_URL`
+   - `TURSO_AUTH_TOKEN`
    - `ADMIN_PASSWORD`
+   - `ADMIN_SESSION_SECRET`
    - `PUBLIC_SITE_URL` (set to your Vercel domain)
 4. Deploy!
 
@@ -235,9 +249,10 @@ docker build -t wedding-website .
 
 # Run the container
 docker run -p 4321:4321 \
-  -e PUBLIC_SUPABASE_URL=https://xxx.supabase.co \
-  -e PUBLIC_SUPABASE_ANON_KEY=your-key \
+  -e TURSO_DATABASE_URL=libsql://your-db.turso.io \
+  -e TURSO_AUTH_TOKEN=your-token \
   -e ADMIN_PASSWORD=your-password \
+  -e ADMIN_SESSION_SECRET=your-secret \
   -e PUBLIC_SITE_URL=https://your-domain.com \
   wedding-website
 ```
@@ -340,7 +355,8 @@ wedding_website_v2/
 │   ├── components/       # Reusable UI components
 │   ├── layouts/          # Page layouts
 │   ├── lib/
-│   │   └── supabase.ts   # Database client
+│   │   ├── db.ts         # Turso database client + query functions
+│   │   └── auth.ts       # Admin session auth + rate limiting
 │   ├── pages/
 │   │   ├── api/          # API routes
 │   │   ├── admin/        # Admin dashboard
@@ -349,8 +365,6 @@ wedding_website_v2/
 │   ├── styles/
 │   │   └── global.css    # Global styles
 │   └── config.ts         # Wedding configuration
-├── supabase/
-│   └── migrations/       # Database schema
 ├── .env.example          # Environment template
 └── astro.config.mjs      # Astro configuration
 ```
